@@ -1,1 +1,13 @@
 docs/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Secrets
+.env
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/

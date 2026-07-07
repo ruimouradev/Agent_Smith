@@ -21,3 +21,34 @@ Tasks 1 to 3 must be done first — they are required for integration and testin
 6. Integration — real sandbox, MBPP end to end, then SWE-bench (10h)
 7. Tuning — lower iterations and token usage (17h)
 8. Benchmark — 5+ models on 3+ tasks, ablation, `BENCHMARK_REPORT.md` (31h)
+
+## Order
+
+Together:
+
+1 - contract/models.py
+2 - contract/protocols.py
+3 - contract/feedback.py
+
+Alexandre:
+
+1 - sandbox/cell.py
+2 - sandbox/supervisor.py
+3 - sandbox/cli.py
+4 - sandbox/mcp_client.py
+5 - mcp_tools_mbpp.py
+6 - mcp_tools_swebench.py
+7 - README.md
+
+Rui:
+
+1 - agent/extract.py
+2 - agent/loop.py
+3 - agent/budget.py
+4 - agent/driver.py
+5 - agent/providers.py
+6 - agent/profiles.py
+7 - agent_mbpp.py
+8 - agent/docker_bridge.py
+9 - agent_swebench.py
+10 - benchmarks/ + BENCHMARK_REPORT.md
