@@ -79,3 +79,37 @@ def _json_call(text: str) -> str | None:
     if call is None:
         return None
     return _as_code(call.get("name"), call.get("arguments", {}))
+
+
+def _react_call(text: str) -> str | None:
+    """Convert a ReAct Action / Action Input pair to a Python call."""
+    match = _REACT_CALL.search(text)
+    if not match:
+        return None
+    args = _decode_json(text, match.end())
+    if args is None:
+        return None
+    return _as_code(match.group(1), args)
+
+
+def _decode_json(text: str, start: int) -> dict | None:
+    """Parse one complete JSON object found at or after start."""
+    brace = text.find("{", start)
+    if brace == -1:
+        return None
+    # raw_decode reads exactly one JSON value, so nested braces and
+    # braces inside strings are handled correctly
+    try:
+        value, _ = _DECODER.raw_decode(text, brace)
+    except json.JSONDecodeError:
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _as_code(name: str | None, arguments: dict) -> str | None:
+    """Render a tool name and its arguments as Python source."""
+    if not name:
+        return None
+    # repr() turns JSON values (True, None, "x") into Python literals
+    args = ", ".join(f"{key}={value!r}" for key, value in arguments.items())
+    return f"{name}({args})"
