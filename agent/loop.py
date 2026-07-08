@@ -1,1 +1,2 @@
-"""Rui - agent loop: Thought -> Code -> Observation until final_answer."""
+"""Rui - the agent loop, start to finish: Thought -> Code -> Observation,
+and always writes solution.json, even on error."""
