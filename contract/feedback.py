@@ -5,6 +5,10 @@ Each message states what happened and what to do next, so the next
 iteration can fix the problem instead of guessing.
 """
 
+# prefix of the observation when the code called final_answer():
+# the sandbox emits it, the loop stops on it
+FINAL_PREFIX = "__final__:"
+
 NO_CODE = (
     "No python code block found in your reply. "
     "Reply with a short thought and one ```python code block."
