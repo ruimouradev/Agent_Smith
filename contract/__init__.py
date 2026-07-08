@@ -1,6 +1,7 @@
-"""The contract package — the only boundary between agent/ and sandbox/.
+"""
+Shared models, interfaces and messages.
 
-Both domains import from here and never from each other.
+agent/ and sandbox/ import from here and not from each other.
 """
 
 from contract.models import (
