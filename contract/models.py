@@ -9,10 +9,11 @@ from pydantic import BaseModel, Field
 
 
 class SandboxConfig(BaseModel):
-    """Sandbox configuration for student solutions.
+    """Limits and permissions for the execution sandbox.
 
-    Uses allowlist approach: only imports in authorized_imports are
-    allowed. Everything else is blocked by default.
+    Allowlist approach: only the imports in authorized_imports are
+    allowed; everything else is blocked by default. Loaded from a JSON
+    config file.
     """
     authorized_imports: List[str] = Field(default_factory=lambda: [
         "math", "math.*",
@@ -33,7 +34,7 @@ class SandboxConfig(BaseModel):
 
 
 class MBPPTaskInput(BaseModel):
-    """Input for MBPP task evaluation."""
+    """An MBPP task, loaded from the dumped task.json."""
     task_id: int
     task_definition: str
     function_definition: str
@@ -42,10 +43,10 @@ class MBPPTaskInput(BaseModel):
 
 
 class SWEBenchTaskInput(BaseModel):
-    """Input for a SWE-bench task, provided by the moulinette.
+    """A SWE-bench task, loaded from the dumped task.json.
 
-    Your agent receives this and must produce a git patch that fixes
-    the issue.
+    The run ends with a git patch for the repo inside the task's
+    Docker image.
     """
     instance_id: str = Field(
         ...,
@@ -138,11 +139,10 @@ class StepMetrics(BaseModel):
 
 
 class SolutionOutput(BaseModel):
-    """Output from student solution, required format for evaluation.
+    """The final result of a run, written to solution.json.
 
-    This is the JSON structure your agent must produce and write to
-    solution.json. The moulinette validates this against task
-    correctness and metrics limits.
+    Built from the step trace at the end of every run — including
+    failed ones, where error is set and success is False.
     """
     task_id: str = Field(
         ...,
