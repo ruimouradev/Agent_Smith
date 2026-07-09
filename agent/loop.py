@@ -1,3 +1,11 @@
+"""
+The agent loop: Thought -> Code -> Observation until final_answer.
+
+run() drives one whole task: asks the provider for a reply, extracts
+the code, executes it in the sandbox and feeds the observation back,
+while the budget allows. Whatever happens — success, budget exhausted
+or an exception — a valid solution.json is always written.
+"""
 
 import time
 from pathlib import Path
@@ -14,6 +22,22 @@ _LAST_CALL = (
 
 def run(profile, sandbox: Sandbox, provider, budget,
         output_path: str | Path) -> SolutionOutput:
+    """
+    Drive one task from the first prompt to solution.json.
+
+    Args:
+        profile: Benchmark-specific data: prompts, stop sequences,
+            observation size limit and how to read the final answer.
+        sandbox: Where the extracted code runs.
+        provider: LLM access; generate(messages, stop) returns a
+            reply carrying the text and its cost.
+        budget: Iteration/token/time limits for this run.
+        output_path: Where to write the solution.json.
+
+    Returns:
+        The SolutionOutput that was written, valid even on failure.
+    """
+    
     start = time.monotonic()
     system_prompt = profile.system_prompt(sandbox.manual)
     messages = [
