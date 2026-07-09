@@ -1,0 +1,29 @@
+[project]
+name = "agent-smith"
+version = "0.1.0"
+requires-python = ">=3.10"
+authors = [
+    { name = "Rui Moura (rusilva-)" },
+    { name = "Alexandre (acaldeir)" },
+]
+dependencies = [
+    "openai>=2.44.0",
+    "pydantic>=2.13.4",
+]
+
+[project.scripts]
+sandbox = "sandbox.cli:main"
+
+[dependency-groups]
+dev = [
+    "flake8>=7.3.0",
+    "mypy>=2.2.0",
+    "pytest>=9.1.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["contract", "agent", "sandbox"]
