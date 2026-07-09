@@ -45,7 +45,7 @@ Rui:
 1 - agent/extract.py - OK
 2 - agent/loop.py - OK but probably will review it
 3 - agent/budget.py - OK
-4 - agent/providers.py - WIP - some parts to review and docstring to add
+4 - agent/providers.py - OK
 5 - agent/profiles.py
 6 - agent_mbpp.py
 7 - agent/docker_bridge.py
