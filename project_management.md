@@ -26,9 +26,9 @@ Tasks 1 to 3 must be done first — they are required for integration and testin
 
 Together:
 
-1 - contract/models.py
-2 - contract/protocols.py
-3 - contract/feedback.py
+1 - contract/models.py - OK for now
+2 - contract/protocols.py - OK for now
+3 - contract/feedback.py - OK for now
 
 Alexandre:
 
@@ -42,9 +42,9 @@ Alexandre:
 
 Rui:
 
-1 - agent/extract.py
-2 - agent/loop.py
-3 - agent/budget.py
+1 - agent/extract.py - OK
+2 - agent/loop.py - OK but probably will review it
+3 - agent/budget.py - OK
 4 - agent/providers.py
 5 - agent/profiles.py
 6 - agent_mbpp.py
