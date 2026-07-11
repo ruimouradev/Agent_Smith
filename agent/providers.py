@@ -34,7 +34,8 @@ class Provider:
     """One OpenAI-compatible endpoint with rotating API keys."""
 
     def __init__(self, base_url: str, model: str, keys: list[str],
-                 max_attempts: int = 4, pause_seconds: float = 1.5):
+                 max_attempts: int = 4, pause_seconds: float = 1.5,
+                 timeout_seconds: float = 100.0):
         """
         Set up the endpoint and its keys.
 
@@ -44,6 +45,8 @@ class Provider:
             keys: API keys, tried in rotation on rate limits.
             max_attempts: Give up after this many tries per call.
             pause_seconds: Pause before retrying a transient error.
+            timeout_seconds: Abort one call after this long; a hung
+                request must never eat the task clock.
         """
         if not keys:
             raise ValueError("no API keys given")
@@ -53,15 +56,19 @@ class Provider:
         self.active = 0
         self.max_attempts = max_attempts
         self.pause_seconds = pause_seconds
+        self.timeout_seconds = timeout_seconds
         self._client = self._build_client()
 
-    def generate(self, messages: list[dict], stop: list[str]) -> Reply:
+    def generate(self, messages: list[dict], stop: list[str],
+                 max_tokens: int | None = None) -> Reply:
         """
         Ask the model for the next reply.
 
         Args:
             messages: The conversation so far (role/content dicts).
             stop: Stop sequences that end the generation.
+            max_tokens: Server-side cap on the reply length, so one
+                call can never blow the cumulative output limit.
 
         Returns:
             A Reply with the text and its cost, taken from the
@@ -75,6 +82,7 @@ class Provider:
                     model=self.model,
                     messages=cast(Any, messages),
                     stop=stop,
+                    max_tokens=max_tokens,
                 )
                 break
             except RateLimitError:
@@ -82,6 +90,10 @@ class Provider:
                 if attempts >= self.max_attempts:
                     raise
                 self._rotate()  # the next key has its own quota
+                if attempts % len(self.keys) == 0:
+                    # a full lap: every key is limited, so waiting
+                    # is all that is left
+                    time.sleep(self.pause_seconds)
             except APIError:
                 attempts += 1
                 if attempts >= self.max_attempts:
@@ -108,9 +120,13 @@ class Provider:
     def _build_client(self) -> OpenAI:
         """Build the client for the active key."""
         # built once and reused: a client per call would redo the
-        # TLS handshake every time, a real cost on the 120s clock
+        # TLS handshake every time, a real cost on the 120s clock.
+        # max_retries=0: the SDK's own retries (2, with backoff, on
+        # the same key) would fight our instant key rotation.
         return OpenAI(base_url=self.base_url,
-                      api_key=self.keys[self.active])
+                      api_key=self.keys[self.active],
+                      max_retries=0,
+                      timeout=self.timeout_seconds)
 
     def _rotate(self) -> None:
         """Switch to the next key (circular: k1 -> k2 -> ... -> k1)."""
@@ -119,7 +135,8 @@ class Provider:
 
 
 def from_config(path: str | Path, model: str | None = None,
-                base_url: str | None = None) -> Provider:
+                base_url: str | None = None,
+                timeout_seconds: float = 100.0) -> Provider:
     """
     Build a Provider from configs/models.json and the environment.
 
@@ -131,6 +148,7 @@ def from_config(path: str | Path, model: str | None = None,
         path: The models.json file.
         model: Optional override (the evaluation's --model-name).
         base_url: Optional override (the evaluation's --provider-url).
+        timeout_seconds: Per-call timeout, sized to the benchmark.
 
     Returns:
         A ready Provider.
@@ -143,6 +161,7 @@ def from_config(path: str | Path, model: str | None = None,
                 base_url=base_url or entry["base_url"],
                 model=model or entry["model"],
                 keys=keys,
+                timeout_seconds=timeout_seconds,
             )
     names = ", ".join(e["keys_env"] for e in config["providers"])
     raise RuntimeError(f"no API keys found; set one of: {names}")

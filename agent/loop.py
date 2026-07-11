@@ -29,15 +29,14 @@ def run(profile, sandbox: Sandbox, provider, budget,
         profile: Benchmark-specific data: prompts, stop sequences,
             observation size limit and how to read the final answer.
         sandbox: Where the extracted code runs.
-        provider: LLM access; generate(messages, stop) returns a
-            reply carrying the text and its cost.
+        provider: LLM access; generate(messages, stop, max_tokens)
+            returns a reply carrying the text and its cost.
         budget: Iteration/token/time limits for this run.
         output_path: Where to write the solution.json.
 
     Returns:
         The SolutionOutput that was written, valid even on failure.
     """
-    
     start = time.monotonic()
     system_prompt = profile.system_prompt(sandbox.manual)
     messages = [
@@ -48,13 +47,18 @@ def run(profile, sandbox: Sandbox, provider, budget,
     solution = ""
     success = False
     error = None
+    warned = False
 
     try:
         while budget.allows():
-            if budget.is_last():
+            if budget.is_last() and not warned:
+                # said once: repeating it would only burn tokens
                 messages.append({"role": "user", "content": _LAST_CALL})
+                warned = True
 
-            reply = provider.generate(messages, profile.stop)
+            # the cap makes blowing the output limit impossible
+            reply = provider.generate(messages, profile.stop,
+                                      budget.remaining_output())
             budget.spend(reply)
 
             code = extract(reply.text)
