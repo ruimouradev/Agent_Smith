@@ -19,6 +19,9 @@ from agent.providers import from_config
 from contract import SolutionOutput, SWEBenchTaskInput
 from contract.protocols import Sandbox
 
+# anchored to this file, so the entry point works from any cwd
+_MODELS_JSON = Path(__file__).parent / "configs" / "models.json"
+
 
 def main() -> None:
     """Parse the evaluation arguments and drive one SWE-bench task."""
@@ -35,9 +38,10 @@ def main() -> None:
         task_id = str(raw.get("instance_id", task_id))
         task = SWEBenchTaskInput(**raw)
         profile = swebench_profile(task)
-        provider = from_config("configs/models.json",
+        provider = from_config(_MODELS_JSON,
                                model=args.model_name,
-                               base_url=args.provider_url)
+                               base_url=args.provider_url,
+                               timeout_seconds=profile.request_timeout)
         budget = Budget(profile.max_iterations, profile.max_input_tokens,
                         profile.max_output_tokens, profile.max_seconds)
         run(profile, _make_sandbox(), provider, budget, args.output)
