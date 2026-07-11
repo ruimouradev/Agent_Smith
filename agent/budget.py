@@ -32,14 +32,27 @@ class Budget:
         self.input_tokens = 0
         self.output_tokens = 0
         self.last_input_cost = 0
+        self.last_iter_seconds = 0.0
         self.start = time.monotonic()
+        self._mark = self.start
 
     def allows(self) -> bool:
-        """Return True while every limit still has room."""
+        """
+        Return True while the next iteration still surely fits.
+
+        Predictive where overshooting would fail the run: the context
+        only grows, so the next call costs at least what the last one
+        did — if even that minimum does not fit in the input or time
+        limits, the call is not worth making, because the evaluation
+        checks the final totals. Output needs no prediction here: the
+        provider caps it server-side per call.
+        """
         return (self.iterations < self.max_iterations
-                and self.input_tokens < self.max_input_tokens
+                and (self.input_tokens + self.last_input_cost
+                     <= self.max_input_tokens)
                 and self.output_tokens < self.max_output_tokens
-                and self.elapsed() < self.max_seconds)
+                and (self.elapsed() + self.last_iter_seconds
+                     < self.max_seconds))
 
     def is_last(self) -> bool:
         """
@@ -57,10 +70,17 @@ class Budget:
 
     def spend(self, reply) -> None:
         """Count one iteration and add the receipt of its LLM call."""
+        now = time.monotonic()
+        self.last_iter_seconds = now - self._mark
+        self._mark = now
         self.iterations += 1
         self.input_tokens += reply.input_tokens
         self.output_tokens += reply.output_tokens
         self.last_input_cost = reply.input_tokens
+
+    def remaining_output(self) -> int:
+        """Output tokens still spendable: the hard cap for one call."""
+        return self.max_output_tokens - self.output_tokens
 
     def elapsed(self) -> float:
         """Seconds since the budget was created."""

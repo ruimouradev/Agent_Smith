@@ -34,7 +34,7 @@ class Provider:
     """One OpenAI-compatible endpoint with rotating API keys."""
 
     def __init__(self, base_url: str, model: str, keys: list[str],
-                 max_attempts: int = 4, pause_seconds: float = 1.5,
+                 max_attempts: int = 20, pause_seconds: float = 5.0,
                  timeout_seconds: float = 100.0):
         """
         Set up the endpoint and its keys.
@@ -91,8 +91,8 @@ class Provider:
                     raise
                 self._rotate()  # the next key has its own quota
                 if attempts % len(self.keys) == 0:
-                    # a full lap: every key is limited, so waiting
-                    # is all that is left
+                    # a full lap over the keys: all of them are
+                    # rate-limited, so pause before the next round
                     time.sleep(self.pause_seconds)
             except APIError:
                 attempts += 1
@@ -100,7 +100,8 @@ class Provider:
                     raise
                 time.sleep(self.pause_seconds)
         usage = response.usage
-        # metrics are mandatory: fail loudly, not with fabricated 0s
+        # the budget and the step metrics are built from these counts;
+        # without them the limits cannot be enforced, so this is an error
         if usage is None:
             raise RuntimeError(f"{self.base_url} returned no usage counts")
         # some providers return no choices on filtered/failed generations
@@ -122,7 +123,7 @@ class Provider:
         # built once and reused: a client per call would redo the
         # TLS handshake every time, a real cost on the 120s clock.
         # max_retries=0: the SDK's own retries (2, with backoff, on
-        # the same key) would fight our instant key rotation.
+        # the same key) would delay the key rotation done in generate().
         return OpenAI(base_url=self.base_url,
                       api_key=self.keys[self.active],
                       max_retries=0,
