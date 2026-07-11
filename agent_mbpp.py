@@ -46,7 +46,7 @@ def main() -> None:
 
 def _make_sandbox() -> Sandbox:
     """Build the sandbox wired to the MBPP tools."""
-    # integration point: filled in when sandbox/supervisor.py lands
+    # WAITING FOR sandbox/supervisor.py DONE
     raise NotImplementedError("sandbox/supervisor.py not ready yet")
 
 

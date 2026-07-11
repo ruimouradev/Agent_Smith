@@ -82,6 +82,10 @@ class Provider:
                 if attempts >= self.max_attempts:
                     raise
                 self._rotate()  # the next key has its own quota
+                if attempts % len(self.keys) == 0:
+                    # a full lap: every key is limited, so waiting
+                    # is all that is left
+                    time.sleep(self.pause_seconds)
             except APIError:
                 attempts += 1
                 if attempts >= self.max_attempts:

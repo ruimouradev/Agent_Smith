@@ -37,7 +37,6 @@ def run(profile, sandbox: Sandbox, provider, budget,
     Returns:
         The SolutionOutput that was written, valid even on failure.
     """
-    
     start = time.monotonic()
     system_prompt = profile.system_prompt(sandbox.manual)
     messages = [
@@ -48,11 +47,14 @@ def run(profile, sandbox: Sandbox, provider, budget,
     solution = ""
     success = False
     error = None
+    warned = False
 
     try:
         while budget.allows():
-            if budget.is_last():
+            if budget.is_last() and not warned:
+                # said once: repeating it would only burn tokens
                 messages.append({"role": "user", "content": _LAST_CALL})
+                warned = True
 
             reply = provider.generate(messages, profile.stop)
             budget.spend(reply)
