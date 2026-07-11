@@ -52,11 +52,13 @@ def run(profile, sandbox: Sandbox, provider, budget,
     try:
         while budget.allows():
             if budget.is_last() and not warned:
-                # said once: repeating it would only burn tokens
+                # is_last() can stay true for several turns; the
+                # warning enters the conversation only once
                 messages.append({"role": "user", "content": _LAST_CALL})
                 warned = True
 
-            # the cap makes blowing the output limit impossible
+            # the server cuts the reply at the remaining output
+            # budget, so the output total can never exceed its limit
             reply = provider.generate(messages, profile.stop,
                                       budget.remaining_output())
             budget.spend(reply)
