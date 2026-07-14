@@ -46,9 +46,9 @@ Rui:
 2 - agent/loop.py - OK
 3 - agent/budget.py - OK
 4 - agent/providers.py - OK
-5 - agent/profiles.py - WIP
+5 - agent/profiles.py - OK for now
 6 - agent_mbpp.py - Started, waiting for sandbox/supervisor.py
 7 - agent/docker_bridge.py
-8 - agent_swebench.py - Started need to review
-9 - tests
+8 - agent_swebench.py - OK for now
+9 - tests - WIP
 10 - benchmarks/ + BENCHMARK_REPORT.md
