@@ -1,10 +1,53 @@
+"""
+What changes between MBPP and SWE-bench: prompt, limits and formats.
+
+A Profile carries everything benchmark-specific; the loop and the
+budget only read it. The MBPP prompt is deliberately spartan (its
+tokens are paid on every iteration of a tight budget); the SWE-bench
+one can afford method.
+"""
+
 from dataclasses import dataclass
 
 from contract import MBPPTaskInput, SWEBenchTaskInput
 
-_MBPP_TEMPLATE = """WIP"""
+_MBPP_TEMPLATE = """You are a Python coding agent. Solve the task in \
+as few steps as possible.
 
-_SWEBENCH_TEMPLATE = """WIP"""
+Each turn: one short thought, then exactly one ```python code block.
+The code runs in a sandbox; its output comes back next turn as
+Observation. Never write the Observation yourself.
+
+{manual}
+
+Rules:
+- Define exactly the function asked for.
+- Check it with run_tests before answering.
+- When the tests pass, call final_answer with the full function
+  source code as a string.
+"""
+
+_SWEBENCH_TEMPLATE = """You are an autonomous software engineer. You \
+work on a real repository mounted at /testbed inside a container.
+
+Each turn: one short thought, then exactly one ```python code block.
+The code runs in a sandbox; its output comes back next turn as
+Observation. Never write the Observation yourself.
+
+{manual}
+
+Method:
+1. Read the issue and find the relevant code (search, read files).
+2. Understand the cause before editing. Reproduce it if you can.
+3. Make the smallest fix that solves the issue.
+4. Run the tests that cover the change.
+5. Call get_patch to collect your diff, then final_answer with the
+   patch string.
+
+Rules:
+- Fix the cause, not the symptom. Do not touch unrelated code.
+- If a step fails, read the error before trying again.
+"""
 
 
 @dataclass
@@ -31,6 +74,12 @@ class Profile:
 def mbpp_profile(task: MBPPTaskInput) -> Profile:
     """
     Build the profile for one MBPP task.
+
+    Args:
+        task: The task as dumped by the moulinette.
+
+    Returns:
+        A Profile with the spartan prompt and the MBPP limits.
     """
     tests = "\n".join(task.test_imports + task.test_list)
     user_prompt = (
@@ -56,6 +105,12 @@ def mbpp_profile(task: MBPPTaskInput) -> Profile:
 def swebench_profile(task: SWEBenchTaskInput) -> Profile:
     """
     Build the profile for one SWE-bench task.
+
+    Args:
+        task: The task as dumped by the moulinette.
+
+    Returns:
+        A Profile with the method prompt and the SWE-bench limits.
     """
     hints = f"\n\nHints:\n{task.hints_text}" if task.hints_text else ""
     user_prompt = (
