@@ -11,14 +11,26 @@ to the equivalent Python call, so the sandbox only ever sees Python.
 import json
 import re
 
-# the language tag is optional: weak models often forget it
+# Compiled once at import and used on every model response.
+# Optional language tag: weak models forget it.
+# Non-greedy: close at the first ```, not the last.
+# DOTALL: code spans lines.
 _PYTHON_BLOCK = re.compile(r"```(?:python|py)?\n(.*?)```", re.DOTALL)
+
+# Detects an unclosed block.
 _OPEN_FENCE = re.compile(r"```(?:python|py)?\n")
+
+# Anthropic-style tool calls. [^"] stops at the closing quote.
 _XML_INVOKE = re.compile(r'<invoke name="([^"]+)">(.*?)</invoke>', re.DOTALL)
 _XML_PARAM = re.compile(
     r'<parameter name="([^"]+)">(.*?)</parameter>', re.DOTALL
 )
+
+# ReAct format. Locates where the JSON starts
+# payload goes to _DECODER.
 _REACT_CALL = re.compile(r"Action:\s*(\w+)\s*Action Input:")
+
+# raw_decode(): reads one JSON value from an offset, ignores the rest.
 _DECODER = json.JSONDecoder()
 
 
