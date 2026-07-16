@@ -29,3 +29,77 @@ class SandboxImportBlocker:
         return False
 
 # In the next steps, we will read the config and inject this blocker into sys.meta_path
+
+def is_path_allowed(requested_path, allowed_directories):
+    try:
+        # Resolve real absolute path to avoid traversal attacks
+        real_path = os.path.realpath(requested_path)
+    except Exception:
+        return False
+    
+    for allowed_dir in allowed_directories:
+        real_allowed = os.path.realpath(allowed_dir)
+        # Check if the resolved path is within the allowed directory
+        if os.path.commonpath([real_path, real_allowed]) == real_allowed:
+            return True
+    return False
+
+def secure_open(allowed_directories):
+    # Get original open
+    import builtins
+    original_open = builtins.open
+    
+    def _safe_open(file, mode='r', buffering=-1, encoding=None, errors=None, newline=None, closefd=True, opener=None):
+        if not is_path_allowed(file, allowed_directories):
+            raise PermissionError(f"Sandbox blocked access to path: {file}")
+        return original_open(file, mode, buffering, encoding, errors, newline, closefd, opener)
+    
+    return _safe_open
+
+def run_cell():
+    import json
+    
+    # Read config from environment variable passed by the supervisor
+    config_json = os.environ.get('SANDBOX_CONFIG_JSON', '{}')
+    config = json.loads(config_json)
+    
+    allowed_imports = config.get('authorized_imports', [])
+    allowed_directories = config.get('allowed_directories', [])
+    
+    # 1. Install Import Blocker
+    sys.meta_path.insert(0, SandboxImportBlocker(allowed_imports))
+    
+    # 2. Build Safe Builtins
+    import builtins
+    safe_builtins = {}
+    
+    b_dict = __builtins__ if isinstance(__builtins__, dict) else __builtins__.__dict__
+    dangerous = {"eval", "exec", "compile", "__import__", "open", "input", "breakpoint"}
+    
+    for k, v in b_dict.items():
+        if k not in dangerous:
+            safe_builtins[k] = v
+            
+    # Inject secure open
+    safe_builtins['open'] = secure_open(allowed_directories)
+    
+    # 3. Read Code from Stdin
+    code_to_run = sys.stdin.read()
+    
+    # 4. Execute Code
+    execution_namespace = {
+        "__builtins__": safe_builtins,
+    }
+    
+    try:
+        exec(code_to_run, execution_namespace)
+    except (KeyboardInterrupt, SystemExit):
+        raise  # Must propagate flow control exceptions
+    except Exception as e:
+        # Standard exceptions will naturally propagate to stderr, 
+        # but we let them raise so the supervisor can capture the traceback.
+        raise
+
+if __name__ == "__main__":
+    run_cell()
+
