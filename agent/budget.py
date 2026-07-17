@@ -42,9 +42,9 @@ class Budget:
 
         Predictive where overshooting would fail the run: the context
         only grows, so the next call costs at least what the last one
-        did — if even that minimum does not fit in the input or time
-        limits, the call is not worth making, because the evaluation
-        checks the final totals. Output needs no prediction here: the
+        did; if even that minimum does not fit in the input or time
+        limits, the call is not worth making: the final totals must
+        stay within the limits. Output needs no prediction here: the
         provider caps it server-side per call.
         """
         return (self.iterations < self.max_iterations
@@ -61,7 +61,7 @@ class Budget:
         Two triggers: the iteration count, or the remaining input
         tokens. The context only grows (the reply and the observation
         are appended every turn), so the next call costs more than the
-        previous one — the 1.5 factor is that growth margin.
+        previous one; the 1.5 factor is that growth margin.
         """
         by_count = self.iterations == self.max_iterations - 1
         remaining = self.max_input_tokens - self.input_tokens

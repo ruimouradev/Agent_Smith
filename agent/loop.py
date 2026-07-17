@@ -3,8 +3,8 @@ The agent loop: Thought -> Code -> Observation until final_answer.
 
 run() drives one whole task: asks the provider for a reply, extracts
 the code, executes it in the sandbox and feeds the observation back,
-while the budget allows. Whatever happens — success, budget exhausted
-or an exception — a valid solution.json is always written.
+while the budget allows. Whatever happens (success, budget exhausted
+or an exception), a valid solution.json is always written.
 """
 
 import time
