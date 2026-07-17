@@ -2,6 +2,7 @@
 
 import sys
 import os
+from contract import feedback
 
 class SandboxImportBlocker:
     """
@@ -15,8 +16,8 @@ class SandboxImportBlocker:
             return None  # Let the normal import system handle it
         
         raise ModuleNotFoundError(
-            f"Import blocked by sandbox: '{fullname}'. "
-            f"Allowed modules: {self.allowed}"
+            feedback.BLOCKED_IMPORT.format(name=fullname,
+                                           allowed=", ".join(self.allowed))
         )
 
     def _is_allowed(self, name):
@@ -51,7 +52,10 @@ def secure_open(allowed_directories):
     
     def _safe_open(file, mode='r', buffering=-1, encoding=None, errors=None, newline=None, closefd=True, opener=None):
         if not is_path_allowed(file, allowed_directories):
-            raise PermissionError(f"Sandbox blocked access to path: {file}")
+            raise PermissionError(
+                feedback.BLOCKED_PATH.format(path=file,
+                                             allowed=", ".join(allowed_directories))
+            )
         return original_open(file, mode, buffering, encoding, errors, newline, closefd, opener)
     
     return _safe_open
