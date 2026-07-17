@@ -1,7 +1,7 @@
 """
 LLM access: one OpenAI-compatible endpoint, several keys, retries.
 
-generate() returns a Reply — the receipt the loop feeds to the budget
+generate() returns a Reply: the receipt the loop feeds to the budget
 and the step metrics. Keys rotate on rate limits; transient errors are
 retried with a short pause; after max_attempts the exception rises and
 the loop turns it into an error solution.json.
@@ -147,8 +147,8 @@ def from_config(path: str | Path, model: str | None = None,
 
     Args:
         path: The models.json file.
-        model: Optional override (the evaluation's --model-name).
-        base_url: Optional override (the evaluation's --provider-url).
+        model: Optional override (the --model-name CLI flag).
+        base_url: Optional override (the --provider-url CLI flag).
         timeout_seconds: Per-call timeout, sized to the benchmark.
 
     Returns:

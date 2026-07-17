@@ -1,5 +1,5 @@
 """
-Evaluation entry point for MBPP: python -m agent_mbpp --task-file --output.
+Entry point for MBPP: python -m agent_mbpp --task-file --output.
 
 Builds the real pieces (task, profile, provider, budget, sandbox) and
 hands them to the loop. A failure before the loop starts still writes
@@ -23,7 +23,7 @@ _MODELS_JSON = Path(__file__).parent / "configs" / "models.json"
 
 
 def main() -> None:
-    """Parse the evaluation arguments and drive one MBPP task."""
+    """Parse the CLI arguments and drive one MBPP task."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--task-file", required=True)
     parser.add_argument("--output", required=True)

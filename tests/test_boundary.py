@@ -1,6 +1,6 @@
 """Architecture rules enforced as tests, so they cannot rot.
 
-agent/ and sandbox/ must never import each other — they meet only
+agent/ and sandbox/ must never import each other; they meet only
 through contract/. And every module, class and function of the
 finished code carries a docstring.
 """

@@ -2,7 +2,7 @@
 The SWE-bench task container: startup, command execution, cleanup.
 
 The container is started with a lifeline: its main process reads our
-stdin pipe, so the kernel kills it the moment this process dies — by
+stdin pipe, so the kernel kills it the moment this process dies, by
 any means, including kill -9, when no cleanup code can run. Normal
 exits also remove it explicitly (atexit + signal handlers), and a
 timeout inside the container caps its life at the task limit.
@@ -110,7 +110,7 @@ class DockerBridge:
         """Wait until the container is actually running, return its id.
 
         The cidfile appears when the container is created, but exec()
-        only works once it is running — so we wait for that state.
+        only works once it is running, so we wait for that state.
         """
         deadline = time.monotonic() + timeout
         cid = ""

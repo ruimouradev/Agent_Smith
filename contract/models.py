@@ -85,7 +85,7 @@ class StepMetrics(BaseModel):
     """Metrics for a single agent step.
 
     Each step corresponds to one LLM generate -> sandbox execute cycle.
-    All fields are required for evaluation, empty strings are acceptable
+    All fields are required, empty strings are acceptable
     for steps where a field doesn't apply (e.g., no sandbox execution).
     """
     step: int = Field(..., description="1-indexed iteration number")
@@ -141,7 +141,7 @@ class StepMetrics(BaseModel):
 class SolutionOutput(BaseModel):
     """The final result of a run, written to solution.json.
 
-    Built from the step trace at the end of every run — including
+    Built from the step trace at the end of every run, including
     failed ones, where error is set and success is False.
     """
     task_id: str = Field(

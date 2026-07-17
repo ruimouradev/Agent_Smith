@@ -59,8 +59,8 @@ def test_time_blocks():
 
 def test_input_blocks_predictively():
     """The next call costs at least what the last one did: when even
-    that minimum does not fit, the call is not made — the evaluation
-    checks the final totals, so overshooting loses the task."""
+    that minimum does not fit, the call is not made. The final totals
+    must stay within the limits, so overshooting loses the task."""
     budget = Budget(10, 6_000, 10**6, 60.0)
     budget.spend(receipt(2_000, 1))
     assert budget.allows()       # 2000 spent + 2000 next = 4000, fits
