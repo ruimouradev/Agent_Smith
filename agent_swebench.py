@@ -1,5 +1,5 @@
 """
-Evaluation entry point for SWE-bench: python -m agent_swebench --task-file
+Entry point for SWE-bench: python -m agent_swebench --task-file
 --output.
 
 Builds the real pieces (task, profile, provider, budget, sandbox) and
@@ -24,7 +24,7 @@ _MODELS_JSON = Path(__file__).parent / "configs" / "models.json"
 
 
 def main() -> None:
-    """Parse the evaluation arguments and drive one SWE-bench task."""
+    """Parse the CLI arguments and drive one SWE-bench task."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--task-file", required=True)
     parser.add_argument("--output", required=True)
