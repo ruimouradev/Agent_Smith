@@ -99,7 +99,7 @@ class LocalSandbox:
         # Monitor the cell's stdout and (if MCP is active) the request pipe.
         watch_fds = [proc.stdout]
         if use_mcp:
-            req_r_file = os.fdopen(req_r, "rb", buffering=0)
+            req_r_file = os.fdopen(req_r, "rb")
             res_w_file = os.fdopen(res_w, "wb", buffering=0)
             watch_fds.append(req_r_file)
             req_buf = b""
