@@ -78,12 +78,20 @@ def run_cell():
     safe_builtins = {}
     
     b_dict = __builtins__ if isinstance(__builtins__, dict) else __builtins__.__dict__
-    dangerous = {"eval", "exec", "compile", "__import__", "open", "input", "breakpoint"}
+    dangerous = {"eval", "exec", "compile", "open", "input", "breakpoint"}
     
     for k, v in b_dict.items():
         if k not in dangerous:
             safe_builtins[k] = v
-            
+
+    def _blocked(name):
+        def stub(*args, **kwargs):
+            raise PermissionError(feedback.BLOCKED_BUILTIN.format(name=name))
+        return stub
+
+    for name in dangerous:
+        safe_builtins[name] = _blocked(name)
+
     # Inject secure open
     safe_builtins['open'] = secure_open(allowed_directories)
     
@@ -91,7 +99,7 @@ def run_cell():
     code_to_run = sys.stdin.read()
     
     def final_answer(answer_string):
-        print(f"{feedback.FINAL_PREFIX}{answer_string}", file=sys.stdout)
+        print(f"{feedback.FINAL_PREFIX}{answer_string}", file=sys.stdout, end="")
         sys.exit(0)
     
     # 4. Execute Code
