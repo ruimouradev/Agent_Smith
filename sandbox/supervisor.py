@@ -16,6 +16,13 @@ class LocalSandbox:
         self.manual = manual
         self._cell_script = os.path.join(os.path.dirname(__file__), "cell.py")
 
+        # the allowed workspace must exist before code tries to use it
+        for directory in config.allowed_directories:
+            try:
+                os.makedirs(directory, exist_ok=True)
+            except OSError:
+                pass  # not creatable here (e.g. /testbed outside a container)
+
     def run(self, code: str) -> str:
         """Execute the LLM's code inside the isolated cell process."""
         if not code.strip():
