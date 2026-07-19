@@ -32,10 +32,10 @@ Together:
 
 Alexandre:
 
-1 - sandbox/cell.py
-2 - sandbox/supervisor.py
-3 - sandbox/cli.py
-4 - sandbox/mcp_client.py
+1 - sandbox/cell.py - OK for now
+2 - sandbox/supervisor.py - OK for now
+3 - sandbox/cli.py - OK for now
+4 - sandbox/mcp_client.py - OK
 5 - mcp_tools_mbpp.py
 6 - mcp_tools_swebench.py
 7 - README.md

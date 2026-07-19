@@ -7,6 +7,7 @@ authors = [
     { name = "Alexandre (acaldeir)" },
 ]
 dependencies = [
+    "mcp>=1.0.0",
     "openai>=2.44.0",
     "pydantic>=2.13.4",
 ]
