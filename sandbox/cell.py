@@ -90,9 +90,15 @@ def run_cell():
     # 3. Read Code from Stdin
     code_to_run = sys.stdin.read()
     
+    def final_answer(answer_string):
+        print(f"{feedback.FINAL_PREFIX}{answer_string}", file=sys.stdout)
+        sys.exit(0)
+    
     # 4. Execute Code
     execution_namespace = {
         "__builtins__": safe_builtins,
+        "final_answer": final_answer,
+        "sandbox_manual": os.environ.get("SANDBOX_MANUAL", ""),
     }
     
     try:

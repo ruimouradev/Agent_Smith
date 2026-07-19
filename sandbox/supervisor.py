@@ -23,6 +23,7 @@ class LocalSandbox:
 
         env = os.environ.copy()
         env["SANDBOX_CONFIG_JSON"] = self.config.model_dump_json()
+        env["SANDBOX_MANUAL"] = self.manual
 
         def set_limits():
             # Apply memory limit using the resource module inside the child process
