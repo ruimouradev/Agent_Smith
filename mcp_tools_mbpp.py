@@ -1,0 +1,62 @@
+"""Alexandre - MBPP MCP tool server: exposes run_tests for the sandbox."""
+
+import json
+import subprocess
+import sys
+import textwrap
+
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("agent-smith-mbpp")
+
+
+@mcp.tool()
+def run_tests(code: str, test_list: list[str]) -> str:
+    """
+    Execute the provided Python function definition and run the given
+    test assertions against it.
+
+    Args:
+        code: Full Python source defining the function to test.
+        test_list: A list of assertion strings (e.g. ["assert f(1) == 2"]).
+
+    Returns:
+        A JSON string with keys:
+            success (bool): True if all assertions passed without error.
+            output  (str):  Combined stdout/stderr, or the exception message.
+    """
+    # Build a self-contained script: define the function, run the assertions
+    assertions = "\n".join(test_list)
+    script = textwrap.dedent(f"""\
+        import sys, traceback
+        try:
+{textwrap.indent(code, "            ")}
+{textwrap.indent(assertions, "            ")}
+            print("__ok__")
+        except Exception:
+            traceback.print_exc()
+    """)
+
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        combined = (result.stdout + result.stderr).strip()
+        success = "__ok__" in result.stdout and result.returncode == 0
+        # Strip the internal sentinel from the output the LLM sees
+        output = combined.replace("__ok__", "").strip()
+    except subprocess.TimeoutExpired:
+        success = False
+        output = "Test execution timed out (>15 s)."
+    except Exception as exc:
+        success = False
+        output = f"run_tests error: {exc}"
+
+    return json.dumps({"success": success, "output": output})
+
+
+if __name__ == "__main__":
+    mcp.run(transport="stdio")
