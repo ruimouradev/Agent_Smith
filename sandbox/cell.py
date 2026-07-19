@@ -70,7 +70,8 @@ def run_cell():
     allowed_directories = config.get('allowed_directories', [])
     
     # 1. Install Import Blocker
-    sys.meta_path.insert(0, SandboxImportBlocker(allowed_imports))
+    blocker = SandboxImportBlocker(allowed_imports)
+    sys.meta_path.insert(0, blocker)
     
     # 2. Build Safe Builtins
     import builtins
@@ -90,6 +91,18 @@ def run_cell():
 
     for name in dangerous:
         safe_builtins[name] = _blocked(name)
+
+    real_import = builtins._import_
+
+    def guarded_import(name, globals=None, locals=None,
+                       fromlist=(), level=0):
+        if not blocker._is_allowed(name):
+            raise ModuleNotFoundError(
+                feedback.BLOCKED_IMPORT.format(
+                    name=name, allowed=", ".join(allowed_imports)))
+        return real_import(name, globals, locals, fromlist, level)
+
+    safe_builtins["_import_"] = guarded_import
 
     # Inject secure open
     safe_builtins['open'] = secure_open(allowed_directories)
@@ -127,9 +140,11 @@ def run_cell():
                     return buf
                 buf += ch
 
-        def _make_tool_wrapper(tool_name, req_fd, res_fd):
+        def _make_tool_wrapper(tool_name, req_fd, res_fd, param_names):
             """Return a callable that proxies tool calls through the IPC pipe."""
-            def wrapper(**kwargs):
+            def wrapper(*args, **kwargs):
+                # positional args map onto the schema's parameter names
+                kwargs.update(zip(param_names, args))
                 msg = json.dumps({"name": tool_name, "arguments": kwargs}).encode() + b"\n"
                 os.write(req_fd, msg)
                 raw = _pipe_readline(res_fd)
@@ -144,7 +159,9 @@ def run_cell():
 
         for _tool in _mcp_tools:
             _name = _tool["name"]
-            execution_namespace[_name] = _make_tool_wrapper(_name, _req_fd, _res_fd)
+            _params = list(_tool.get("inputSchema", {}).get("properties", {}))
+            execution_namespace[_name] = _make_tool_wrapper(
+                _name, _req_fd, _res_fd, _params)
 
     # 6. Execute Code
     try:
