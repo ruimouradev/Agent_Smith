@@ -29,7 +29,6 @@ class SandboxImportBlocker:
                 return True
         return False
 
-# In the next steps, we will read the config and inject this blocker into sys.meta_path
 
 def is_path_allowed(requested_path, allowed_directories):
     try:
@@ -97,26 +96,63 @@ def run_cell():
     
     # 3. Read Code from Stdin
     code_to_run = sys.stdin.read()
-    
+
     def final_answer(answer_string):
         print(f"{feedback.FINAL_PREFIX}{answer_string}", file=sys.stdout, end="")
         sys.exit(0)
-    
-    # 4. Execute Code
+
+    # 4. Build execution namespace
     execution_namespace = {
         "__builtins__": safe_builtins,
         "final_answer": final_answer,
         "sandbox_manual": os.environ.get("SANDBOX_MANUAL", ""),
     }
-    
+
+    # 5. Inject MCP tool wrappers (if MCP is active)
+    _mcp_tools_json = os.environ.get("MCP_TOOLS_JSON", "")
+    _mcp_req_fd_str = os.environ.get("MCP_REQ_FD", "")
+    _mcp_res_fd_str = os.environ.get("MCP_RES_FD", "")
+
+    if _mcp_tools_json and _mcp_req_fd_str and _mcp_res_fd_str:
+        _mcp_tools = json.loads(_mcp_tools_json)
+        _req_fd = int(_mcp_req_fd_str)
+        _res_fd = int(_mcp_res_fd_str)
+
+        def _pipe_readline(fd):
+            """Read one newline-terminated message from a raw pipe FD."""
+            buf = b""
+            while True:
+                ch = os.read(fd, 1)
+                if not ch or ch == b"\n":
+                    return buf
+                buf += ch
+
+        def _make_tool_wrapper(tool_name, req_fd, res_fd):
+            """Return a callable that proxies tool calls through the IPC pipe."""
+            def wrapper(**kwargs):
+                msg = json.dumps({"name": tool_name, "arguments": kwargs}).encode() + b"\n"
+                os.write(req_fd, msg)
+                raw = _pipe_readline(res_fd)
+                response = json.loads(raw)
+                if response.get("ok"):
+                    return response["result"]
+                raise RuntimeError(
+                    f"Tool '{tool_name}' failed: {response.get('error', 'unknown error')}"
+                )
+            wrapper.__name__ = tool_name
+            return wrapper
+
+        for _tool in _mcp_tools:
+            _name = _tool["name"]
+            execution_namespace[_name] = _make_tool_wrapper(_name, _req_fd, _res_fd)
+
+    # 6. Execute Code
     try:
         exec(code_to_run, execution_namespace)
     except (KeyboardInterrupt, SystemExit):
         raise  # Must propagate flow control exceptions
-    except Exception as e:
-        # Standard exceptions will naturally propagate to stderr, 
-        # but we let them raise so the supervisor can capture the traceback.
-        raise
+    except Exception:
+        raise  # Let the supervisor capture the traceback via stderr→stdout
 
 if __name__ == "__main__":
     run_cell()
