@@ -92,7 +92,7 @@ def run_cell():
     for name in dangerous:
         safe_builtins[name] = _blocked(name)
 
-    real_import = builtins._import_
+    real_import = builtins.__import__
 
     def guarded_import(name, globals=None, locals=None,
                        fromlist=(), level=0):
@@ -102,7 +102,7 @@ def run_cell():
                     name=name, allowed=", ".join(allowed_imports)))
         return real_import(name, globals, locals, fromlist, level)
 
-    safe_builtins["_import_"] = guarded_import
+    safe_builtins["__import__"] = guarded_import
 
     # Inject secure open
     safe_builtins['open'] = secure_open(allowed_directories)
