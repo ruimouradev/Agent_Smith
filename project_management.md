@@ -34,7 +34,7 @@ Alexandre:
 
 1 - sandbox/cell.py - OK
 2 - sandbox/supervisor.py - OK
-3 - sandbox/cli.py - OK for now
+3 - sandbox/cli.py - OK
 4 - sandbox/mcp_client.py - OK
 5 - mcp_tools_mbpp.py
 6 - mcp_tools_swebench.py
