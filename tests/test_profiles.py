@@ -1,6 +1,6 @@
 """Tests for agent.profiles: prompts, limits and the manual hook."""
 
-from agent.profiles import mbpp_profile, swebench_profile
+from agent.profiles import mbpp_profile, swe_profile
 
 
 def test_mbpp_task_id_becomes_str(mbpp_task):
@@ -31,21 +31,21 @@ def test_manual_fills_the_template(mbpp_task):
         "XYZ_MANUAL")
 
 
-def test_swebench_limits(swe_task):
+def test_swe_limits(swe_task):
     """The SWE-bench limits, with the wall-clock margin."""
-    profile = swebench_profile(swe_task)
+    profile = swe_profile(swe_task)
     assert (profile.max_iterations, profile.max_input_tokens,
             profile.max_output_tokens, profile.max_seconds
             ) == (30, 300_000, 10_000, 870.0)
     assert profile.request_timeout == 300.0
 
 
-def test_swebench_without_hints(swe_task):
+def test_swe_without_hints(swe_task):
     """No hints in the task: no empty 'Hints:' noise in the prompt."""
-    assert "Hints" not in swebench_profile(swe_task).user_prompt
+    assert "Hints" not in swe_profile(swe_task).user_prompt
 
 
-def test_swebench_with_hints(swe_task):
+def test_swe_with_hints(swe_task):
     """Hints, when present, are appended to the prompt."""
     task = swe_task.model_copy(update={"hints_text": "check the cache"})
-    assert "Hints:\ncheck the cache" in swebench_profile(task).user_prompt
+    assert "Hints:\ncheck the cache" in swe_profile(task).user_prompt

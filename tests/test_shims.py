@@ -59,7 +59,7 @@ def test_mbpp_with_broken_task_file_exits_zero(tmp_path):
     assert written["task_id"] == "unknown"
 
 
-def test_swebench_stops_at_the_sandbox_for_now(tmp_path):
+def test_swe_stops_at_the_sandbox_for_now(tmp_path):
     """With a key set the run reaches _make_sandbox(), which is the
     pending integration point. Update this test when the sandbox
     lands: it should then run the full loop."""

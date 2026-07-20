@@ -100,15 +100,15 @@ class Provider:
                     raise
                 time.sleep(self.pause_seconds)
         usage = response.usage
-        # the budget and the step metrics are built from these counts;
-        # without them the limits cannot be enforced, so this is an error
+        # the budget and the step metrics are built from these counts,
+        # and without them the limits cannot be enforced
         if usage is None:
             raise RuntimeError(f"{self.base_url} returned no usage counts")
         # some providers return no choices on filtered/failed generations
         if not response.choices:
             raise RuntimeError(f"{self.base_url} returned no choices")
         return Reply(
-            # the SDK may give content=None; extract() handles ""
+            # the SDK may give content=None and extract() handles ""
             text=response.choices[0].message.content or "",
             input_tokens=usage.prompt_tokens,
             output_tokens=usage.completion_tokens,

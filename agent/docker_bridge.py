@@ -49,7 +49,7 @@ class DockerBridge:
         cidfile = Path(tempfile.mkstemp(suffix=".cid")[1])
         cidfile.unlink()  # docker refuses an existing cidfile
         # the lifeline: the container's main process reads our stdin
-        # pipe; when this process dies, the pipe closes, cat exits
+        # pipe. When this process dies, the pipe closes, cat exits
         # and --rm removes the container. timeout caps its life.
         self._proc = subprocess.Popen(
             ["docker", "run", "--rm", "-i", "--cidfile", str(cidfile),

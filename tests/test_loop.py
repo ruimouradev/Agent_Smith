@@ -30,9 +30,11 @@ class ScriptedProvider:
     """Replies from a fixed script; records what each call was given."""
 
     def __init__(self, texts: list[str],
-                 input_costs: list[int] | None = None):
+                 input_costs: list[int] | None = None,
+                 output_costs: list[int] | None = None):
         self.texts = list(texts)
         self.input_costs = list(input_costs or [])
+        self.output_costs = list(output_costs or [])
         self.calls: list[list[str]] = []
         self.caps: list[int] = []
 
@@ -41,8 +43,9 @@ class ScriptedProvider:
         self.calls.append([m["content"] for m in messages])
         self.caps.append(max_tokens)
         cost = self.input_costs.pop(0) if self.input_costs else 100
+        out = self.output_costs.pop(0) if self.output_costs else 10
         return SimpleNamespace(
-            text=self.texts.pop(0), input_tokens=cost, output_tokens=10,
+            text=self.texts.pop(0), input_tokens=cost, output_tokens=out,
             time_ms=1.0, retries=0, api_url="u", model_name="m")
 
 
@@ -90,7 +93,7 @@ def test_happy_path(mbpp_task, tmp_path):
     assert out.iterations == 2
     assert out.total_input_tokens == 200
     assert out.steps[-1].sandbox_output.startswith(feedback.FINAL_PREFIX)
-    # the trace keeps the full observation; the model sees it truncated
+    # the trace keeps the full observation, the model a truncated one
     assert "y" * 700 in out.steps[0].sandbox_output
     assert any("truncated" in content for content in provider.calls[1])
     written = json.loads((tmp_path / "solution.json").read_text())
@@ -133,7 +136,8 @@ def test_budget_exhausted_reports_and_warns(mbpp_task, tmp_path):
 
 
 def test_output_cap_follows_the_remaining_budget(mbpp_task, tmp_path):
-    """Each call is capped server-side by what is left to spend."""
+    """Each call is capped server-side by the smaller of the per-step
+    ceiling and what is left to spend."""
     profile = mbpp_profile(mbpp_task)
     provider = ScriptedProvider([
         "```python\nprint(1)\n```",
@@ -141,8 +145,22 @@ def test_output_cap_follows_the_remaining_budget(mbpp_task, tmp_path):
     ])
     run(profile, FakeSandbox(), provider, budget(),
         tmp_path / "solution.json")
-    # 1500 budgeted, 10 spent per reply: 1500 then 1490
-    assert provider.caps == [1_500, 1_490]
+    # the 500 per-step ceiling binds before the 1500 total budget
+    assert provider.caps == [500, 500]
+
+
+def test_step_cap_never_exceeds_the_remaining_budget(mbpp_task, tmp_path):
+    """Near the end of the output budget, the remaining total binds
+    and the request is capped below the per-step ceiling."""
+    profile = mbpp_profile(mbpp_task)
+    provider = ScriptedProvider(
+        ["```python\nprint(1)\n```"] * 2
+        + ["```python\nfinal_answer('ok')\n```"],
+        output_costs=[700, 700, 50])
+    run(profile, FakeSandbox(), provider, budget(),
+        tmp_path / "solution.json")
+    # 1500 total: after 700+700 spent only 100 remain for the call
+    assert provider.caps == [500, 500, 100]
 
 
 def test_totals_never_exceed_the_input_limit(mbpp_task, tmp_path):

@@ -14,17 +14,21 @@ from contract import MBPPTaskInput, SWEBenchTaskInput
 _MBPP_TEMPLATE = """You are a Python coding agent. Solve the task in \
 as few steps as possible.
 
-Each turn: one short thought, then exactly one ```python code block.
+Each turn: one short thought (two sentences at most), then exactly \
+one ```python code block.
 The code runs in a sandbox; its output comes back next turn as
 Observation. Never write the Observation yourself.
 
 {manual}
 
 Rules:
+- Only printed output reaches you: wrap calls in print(...), a bare
+  expression shows nothing.
 - Define exactly the function asked for.
 - Check it with run_tests before answering.
-- When the tests pass, call final_answer with the full function
-  source code as a string.
+- Only after run_tests reports "success": true, call final_answer
+  with the full function source code as a string; submitting
+  unchecked or failing code counts as wrong.
 """
 
 _SWEBENCH_TEMPLATE = """You are an autonomous software engineer. You \
@@ -62,6 +66,9 @@ class Profile:
     max_iterations: int
     max_input_tokens: int
     max_output_tokens: int
+    # output ceiling for a single request, so part of the output
+    # budget always remains for later steps
+    max_step_output_tokens: int
     max_seconds: float
     request_timeout: float
     template: str
@@ -96,13 +103,14 @@ def mbpp_profile(task: MBPPTaskInput) -> Profile:
         max_iterations=10,
         max_input_tokens=6_000,
         max_output_tokens=1_500,
+        max_step_output_tokens=500,
         max_seconds=110.0,  # margin under the 120s wall clock
         request_timeout=60.0,  # a hung call must leave room to retry
         template=_MBPP_TEMPLATE,
     )
 
 
-def swebench_profile(task: SWEBenchTaskInput) -> Profile:
+def swe_profile(task: SWEBenchTaskInput) -> Profile:
     """
     Build the profile for one SWE-bench task.
 
@@ -126,6 +134,7 @@ def swebench_profile(task: SWEBenchTaskInput) -> Profile:
         max_iterations=30,
         max_input_tokens=300_000,
         max_output_tokens=10_000,
+        max_step_output_tokens=2_000,
         max_seconds=870.0,  # margin under the 900s wall clock
         request_timeout=300.0,  # 300k-token calls can be slow
         template=_SWEBENCH_TEMPLATE,

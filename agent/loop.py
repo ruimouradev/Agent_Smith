@@ -52,15 +52,17 @@ def run(profile, sandbox: Sandbox, provider, budget,
     try:
         while budget.allows():
             if budget.is_last() and not warned:
-                # is_last() can stay true for several turns; the
+                # is_last() can stay true for several turns, but the
                 # warning enters the conversation only once
                 messages.append({"role": "user", "content": _LAST_CALL})
                 warned = True
 
-            # the server cuts the reply at the remaining output
-            # budget, so the output total can never exceed its limit
-            reply = provider.generate(messages, profile.stop,
-                                      budget.remaining_output())
+            # each request is capped by the smaller of the remaining
+            # output budget and the per-step ceiling: the total stays
+            # under its limit and a single reply cannot spend it all
+            max_tokens = min(budget.remaining_output(),
+                             profile.max_step_output_tokens)
+            reply = provider.generate(messages, profile.stop, max_tokens)
             budget.spend(reply)
 
             code = extract(reply.text)
@@ -88,7 +90,10 @@ def run(profile, sandbox: Sandbox, provider, budget,
                 success = True
                 break
 
-            messages.append({"role": "assistant", "content": reply.text})
+            # providers reject an assistant message with no content,
+            # so an empty reply enters the history as a placeholder
+            messages.append({"role": "assistant",
+                             "content": reply.text or feedback.EMPTY_REPLY})
             messages.append({
                 "role": "user",
                 "content": _truncate(observation, profile.max_obs_chars),
