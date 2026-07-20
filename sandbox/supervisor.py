@@ -72,7 +72,7 @@ class LocalSandbox:
                 resource.setrlimit(resource.RLIMIT_AS, (mem_bytes, mem_bytes))
 
         proc = subprocess.Popen(
-            [sys.executable, self._cell_script],
+            [sys.executable, "-u", self._cell_script],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
