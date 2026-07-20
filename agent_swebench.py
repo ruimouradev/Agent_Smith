@@ -9,17 +9,34 @@ with 0 either way.
 
 import argparse
 import json
+import os
+import shlex
+import sys
+import tempfile
 from pathlib import Path
 
 from agent.budget import Budget
 from agent.loop import run
 from agent.profiles import swe_profile
 from agent.providers import from_config
-from contract import SolutionOutput, SWEBenchTaskInput
+from contract import SandboxConfig, SolutionOutput, SWEBenchTaskInput
 from contract.protocols import Sandbox
 
 # anchored to this file, so the entry point works from any cwd
 _MODELS_JSON = Path(__file__).parent / "configs" / "models.json"
+_TOOLS_SERVER = Path(__file__).parent / "mcp_tools_swebench.py"
+
+# appended to the manual generated from the discovered tool schemas
+_MANUAL_EXTRA = (
+    "\n"
+    "Usage notes:\n"
+    "- Only printed values reach you: call tools as "
+    "print(read_file(...)).\n"
+    "- run_tests() runs the task's own test suite inside the "
+    "repository; read its output before finishing.\n"
+    "- When the fix is done, call final_answer(get_patch()) to "
+    "submit the git patch."
+)
 
 
 def main() -> None:
@@ -32,6 +49,8 @@ def main() -> None:
     args = parser.parse_args()
 
     task_id = "unknown"
+    bridge = None
+    client = None
     try:
         raw = json.loads(Path(args.task_file).read_text())
         task_id = str(raw.get("instance_id", task_id))
@@ -43,16 +62,55 @@ def main() -> None:
                                timeout_seconds=profile.request_timeout)
         budget = Budget(profile.max_iterations, profile.max_input_tokens,
                         profile.max_output_tokens, profile.max_seconds)
-        run(profile, _make_sandbox(), provider, budget, args.output)
+        bridge = _start_bridge(task)
+        client = _connect_tools(bridge, task)
+        run(profile, _make_sandbox(client), provider, budget, args.output)
     except Exception as exc:  # before the loop: still write a solution
         _write_failure(args.output, task_id, f"{type(exc).__name__}: {exc}")
+    finally:
+        if client is not None:
+            client.close()
+        if bridge is not None:
+            bridge.close()
 
 
-def _make_sandbox() -> Sandbox:
-    """Build the sandbox wired to the SWE-bench tools and the bridge."""
-    # integration point: filled in when sandbox/supervisor.py lands.
-    # This is also where the docker_bridge is started for the task
-    raise NotImplementedError("sandbox/supervisor.py not ready yet")
+def _start_bridge(task: SWEBenchTaskInput):
+    """Start the task container and return the running bridge."""
+    from agent.docker_bridge import DockerBridge
+    bridge = DockerBridge(task.docker_image)
+    bridge.start()
+    return bridge
+
+
+def _connect_tools(bridge, task: SWEBenchTaskInput):
+    """Launch mcp_tools_swebench.py over stdio and return the client.
+
+    The server acts on the task container: it receives the container
+    id and the path of the eval script through the environment.
+    """
+    from sandbox import mcp_client as mcp
+    eval_path = Path(tempfile.mkstemp(suffix=".eval.sh")[1])
+    eval_path.write_text(task.eval_script)
+    os.environ["SWEBENCH_CONTAINER"] = bridge.cid
+    os.environ["SWEBENCH_EVAL_SCRIPT"] = str(eval_path)
+    # shlex.quote keeps the command whole when the path has spaces
+    command = (f"{shlex.quote(sys.executable)} "
+               f"{shlex.quote(str(_TOOLS_SERVER))}")
+    return mcp.factory(command, None)
+
+
+def _make_sandbox(client) -> Sandbox:
+    """Build the sandbox around the connected MCP client.
+
+    The tools are discovered from the server and the manual is
+    generated from their schemas, as the subject requires.
+    """
+    from sandbox import mcp_client as mcp
+    from sandbox.supervisor import LocalSandbox
+    tools = client.list_tools()
+    manual = mcp.generate_manual(tools) + _MANUAL_EXTRA
+    return LocalSandbox(SandboxConfig(), manual=manual,
+                        mcp_client=client, mcp_tools=tools)
 
 
 def _write_failure(output: str, task_id: str, error: str) -> None:

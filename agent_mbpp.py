@@ -73,7 +73,8 @@ def _connect_tools():
     """Launch mcp_tools_mbpp.py over stdio and return the client."""
     from sandbox import mcp_client as mcp
     # shlex.quote keeps the command whole when the path has spaces
-    command = f"{shlex.quote(sys.executable)} {shlex.quote(str(_TOOLS_SERVER))}"
+    command = (f"{shlex.quote(sys.executable)} "
+               f"{shlex.quote(str(_TOOLS_SERVER))}")
     return mcp.factory(command, None)
 
 
