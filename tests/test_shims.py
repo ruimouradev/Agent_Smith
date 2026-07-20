@@ -59,18 +59,19 @@ def test_mbpp_with_broken_task_file_exits_zero(tmp_path):
     assert written["task_id"] == "unknown"
 
 
-def test_swe_stops_at_the_sandbox_for_now(tmp_path):
-    """With a key set the run reaches _make_sandbox(), which is the
-    pending integration point. Update this test when the sandbox
-    lands: it should then run the full loop."""
+def test_swe_writes_a_failure_when_the_container_cannot_start(tmp_path):
+    """With a key set the run reaches the docker bridge. A bogus
+    image cannot start, and the failure still lands in a valid
+    solution.json with exit code 0, as a graded run requires."""
     task = tmp_path / "task.json"
     task.write_text(json.dumps({
         "instance_id": "i-1", "problem_statement": "b",
-        "docker_image": "img", "eval_script": "s",
+        "docker_image": "localhost/no-such-image:none", "eval_script": "s",
     }))
     output = tmp_path / "solution.json"
     result = run_shim("agent_swebench", task, output,
                       clean_env(OPENROUTER_API_KEY="fake"))
     written = json.loads(output.read_text())
     assert result.returncode == 0
-    assert "NotImplementedError" in written["error"]
+    assert written["success"] is False
+    assert written["error"]
