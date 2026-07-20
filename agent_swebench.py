@@ -1,6 +1,5 @@
 """
-Entry point for SWE-bench: python -m agent_swebench --task-file
---output.
+Entry point for SWE-bench: --task-file --output.
 
 Builds the real pieces (task, profile, provider, budget, sandbox) and
 hands them to the loop. A failure before the loop starts still writes
@@ -14,7 +13,7 @@ from pathlib import Path
 
 from agent.budget import Budget
 from agent.loop import run
-from agent.profiles import swebench_profile
+from agent.profiles import swe_profile
 from agent.providers import from_config
 from contract import SolutionOutput, SWEBenchTaskInput
 from contract.protocols import Sandbox
@@ -37,7 +36,7 @@ def main() -> None:
         raw = json.loads(Path(args.task_file).read_text())
         task_id = str(raw.get("instance_id", task_id))
         task = SWEBenchTaskInput(**raw)
-        profile = swebench_profile(task)
+        profile = swe_profile(task)
         provider = from_config(_MODELS_JSON,
                                model=args.model_name,
                                base_url=args.provider_url,
@@ -51,8 +50,8 @@ def main() -> None:
 
 def _make_sandbox() -> Sandbox:
     """Build the sandbox wired to the SWE-bench tools and the bridge."""
-    # integration point: filled in when sandbox/supervisor.py lands;
-    # this is also where the docker_bridge is started for the task
+    # integration point: filled in when sandbox/supervisor.py lands.
+    # This is also where the docker_bridge is started for the task
     raise NotImplementedError("sandbox/supervisor.py not ready yet")
 
 

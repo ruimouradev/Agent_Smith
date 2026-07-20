@@ -13,6 +13,9 @@ NO_CODE = (
     "No python code block found in your reply. "
     "Reply with a short thought and one ```python code block."
 )
+# placed in the history instead of an empty model reply: providers
+# reject an assistant message with no content
+EMPTY_REPLY = "(no output)"
 BLOCKED_IMPORT = (
     "Import of '{name}' is not authorized. Use only: {allowed}."
 )
