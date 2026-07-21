@@ -12,19 +12,7 @@ mcp = FastMCP("agent-smith-mbpp")
 
 @mcp.tool()
 def run_tests(code: str, test_list: list[str]) -> str:
-    """
-    Execute the provided Python function definition and run the given
-    test assertions against it.
-
-    Args:
-        code: Full Python source defining the function to test.
-        test_list: A list of assertion strings (e.g. ["assert f(1) == 2"]).
-
-    Returns:
-        A JSON string with keys:
-            success (bool): True if all assertions passed without error.
-            output  (str):  Combined stdout/stderr, or the exception message.
-    """
+    """Run the task assertions against code. Returns JSON: success, output."""
     # Build a self-contained script: define the function, then run the
     # assertions one at a time. A bare assert carries no message, so
     # each one is named as it runs and the failing line is reported.
@@ -51,7 +39,7 @@ def run_tests(code: str, test_list: list[str]) -> str:
                             pass
                     print("Test failed: " + _t + _got)
                     sys.exit(1)
-            print("_ok_")
+            print("__ok__")
         except Exception:
             traceback.print_exc()
     """)
