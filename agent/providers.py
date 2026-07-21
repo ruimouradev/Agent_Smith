@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
-from openai import APIError, OpenAI, RateLimitError
+from openai import APIError, APIStatusError, OpenAI, RateLimitError
 
 
 @dataclass
@@ -94,6 +94,15 @@ class Provider:
                     # a full lap over the keys: all of them are
                     # rate-limited, so pause before the next round
                     time.sleep(self.pause_seconds)
+            except APIStatusError as exc:
+                # a 4xx answers the same on every attempt, and asking
+                # again spends the time budget on a settled result
+                if exc.status_code < 500:
+                    raise
+                attempts += 1
+                if attempts >= self.max_attempts:
+                    raise
+                time.sleep(self.pause_seconds)
             except APIError:
                 attempts += 1
                 if attempts >= self.max_attempts:
@@ -155,16 +164,23 @@ def from_config(path: str | Path, model: str | None = None,
         A ready Provider.
     """
     config = json.loads(Path(path).read_text())
-    for entry in config["providers"]:
+    entries = config["providers"]
+    if base_url:
+        # the endpoint selects the entry, so the keys that travel are
+        # the ones configured for that endpoint
+        entries = [e for e in entries if e["base_url"] == base_url]
+        if not entries:
+            raise RuntimeError(f"no provider configured for {base_url}")
+    for entry in entries:
         keys = _split_keys(entry["keys_env"])
         if keys:
             return Provider(
-                base_url=base_url or entry["base_url"],
+                base_url=entry["base_url"],
                 model=model or entry["model"],
                 keys=keys,
                 timeout_seconds=timeout_seconds,
             )
-    names = ", ".join(e["keys_env"] for e in config["providers"])
+    names = ", ".join(e["keys_env"] for e in entries)
     raise RuntimeError(f"no API keys found; set one of: {names}")
 
 

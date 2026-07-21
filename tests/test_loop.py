@@ -123,6 +123,29 @@ def test_provider_crash_still_writes_solution(mbpp_task, tmp_path):
     assert (tmp_path / "solution.json").exists()
 
 
+def test_interrupt_is_recorded_and_still_propagates(mbpp_task, tmp_path):
+    """Ctrl+C writes a solution.json that says why, and does not get
+    swallowed on the way out."""
+
+    class InterruptingProvider:
+        """Raises the exception a Ctrl+C delivers."""
+
+        def generate(self, messages, stop, max_tokens=None):
+            """Interrupt the run on the first call."""
+            raise KeyboardInterrupt()
+
+    profile = mbpp_profile(mbpp_task)
+    try:
+        run(profile, FakeSandbox(), InterruptingProvider(), budget(),
+            tmp_path / "solution.json")
+    except KeyboardInterrupt:
+        pass
+    else:
+        raise AssertionError("the interrupt was swallowed")
+    written = json.loads((tmp_path / "solution.json").read_text())
+    assert written["error"].startswith("KeyboardInterrupt")
+
+
 def test_budget_exhausted_reports_and_warns(mbpp_task, tmp_path):
     """No final_answer in time: the error explains it, and the model
     was told the last iteration was the last."""
@@ -197,3 +220,17 @@ def test_last_call_warning_is_not_repeated(mbpp_task, tmp_path):
         AlwaysLastBudget(4, 10**6, 10**6, 60.0),
         tmp_path / "solution.json")
     assert provider.calls[-1].count(_LAST_CALL) <= 1
+
+
+def test_old_turns_leave_the_conversation(mbpp_task, tmp_path):
+    """A long run drops its earliest attempts, so the input cost of
+    the next call stops growing with every turn."""
+    profile = mbpp_profile(mbpp_task)
+    provider = ScriptedProvider(["```python\nprint(1)\n```"] * 8)
+    run(profile, FakeSandbox(), provider, Budget(8, 10**6, 10**6, 60.0),
+        tmp_path / "solution.json")
+    sent = provider.calls[-1]
+    # the opening always travels: the model keeps the task in view
+    assert sent[0] == profile.system_prompt(FakeSandbox.manual)
+    assert sent[1] == profile.user_prompt
+    assert len(sent) == profile.max_turns + 2

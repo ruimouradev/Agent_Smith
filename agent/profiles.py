@@ -22,13 +22,13 @@ Observation. Never write the Observation yourself.
 {manual}
 
 Rules:
+- Every block tests and submits: call run_tests, then final_answer if
+  it reports success. A failing answer is refused and you keep going,
+  so holding it back for another turn gains nothing.
 - Only printed output reaches you, so wrap calls in print(...).
-- Define exactly the function asked for.
 - The tests you are shown are a sample. Write the function the
-  description asks for, general enough to hold for other inputs,
-  and use every parameter it declares.
-- Call final_answer only after run_tests reports "success": true.
-  Submitting unchecked or failing code counts as wrong.
+  description asks for, using every parameter it declares, general
+  enough to hold for inputs the sample does not cover.
 """
 
 _SWEBENCH_TEMPLATE = """You are an autonomous software engineer. You \
@@ -63,6 +63,9 @@ class Profile:
     user_prompt: str
     stop: list[str]
     max_obs_chars: int
+    # how many of the latest messages travel with each call, on top
+    # of the system prompt and the task statement
+    max_turns: int
     max_iterations: int
     max_input_tokens: int
     max_output_tokens: int
@@ -100,6 +103,7 @@ def mbpp_profile(task: MBPPTaskInput) -> Profile:
         user_prompt=user_prompt,
         stop=["Observation:", "<end_code>"],
         max_obs_chars=600,
+        max_turns=6,
         max_iterations=10,
         max_input_tokens=6_000,
         max_output_tokens=1_500,
@@ -131,6 +135,7 @@ def swe_profile(task: SWEBenchTaskInput) -> Profile:
         user_prompt=user_prompt,
         stop=["Observation:", "<end_code>"],
         max_obs_chars=3_000,
+        max_turns=20,
         max_iterations=30,
         max_input_tokens=300_000,
         max_output_tokens=10_000,
