@@ -25,14 +25,33 @@ def run_tests(code: str, test_list: list[str]) -> str:
             success (bool): True if all assertions passed without error.
             output  (str):  Combined stdout/stderr, or the exception message.
     """
-    # Build a self-contained script: define the function, run the assertions
-    assertions = "\n".join(test_list)
+    # Build a self-contained script: define the function, then run the
+    # assertions one at a time. A bare assert carries no message, so
+    # each one is named as it runs and the failing line is reported.
+    checks = "\n".join(
+        f"_tests.append({test!r})" for test in test_list
+    )
     script = textwrap.dedent(f"""\
         import sys, traceback
+        _tests = []
         try:
 {textwrap.indent(code, "            ")}
-{textwrap.indent(assertions, "            ")}
-            print("__ok__")
+{textwrap.indent(checks, "            ")}
+            for _t in _tests:
+                try:
+                    exec(_t)
+                except AssertionError:
+                    _got = ""
+                    if "==" in _t:
+                        try:
+                            _call = _t.split("assert", 1)[1]
+                            _got = " -> got " + repr(eval(
+                                _call.split("==")[0].strip()))
+                        except Exception:
+                            pass
+                    print("Test failed: " + _t + _got)
+                    sys.exit(1)
+            print("_ok_")
         except Exception:
             traceback.print_exc()
     """)

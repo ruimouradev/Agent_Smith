@@ -182,12 +182,11 @@ class LocalSandbox:
             mem_msg = feedback.MEMORY.format(mb=self.config.max_memory_mb)
             return f"{stdout}\n{mem_msg}" if stdout else mem_msg
 
-        # final_answer() prints the FINAL_PREFIX; the loop detects it
-        if feedback.FINAL_PREFIX in stdout:
-            idx = stdout.rfind(feedback.FINAL_PREFIX)
-            return stdout[idx:]
-
-        return stdout
+        # everything the code printed stays here, including whatever
+        # came before final_answer, and the loop locates the marker.
+        # Code that prints nothing would come back as an empty string,
+        # leaving the model without any sign of what happened.
+        return stdout if stdout.strip() else feedback.NO_OUTPUT
 
     # ------------------------------------------------------------------
     # MCP dispatch (called from the event loop when a tool request arrives)
