@@ -8,6 +8,21 @@ from contract.models import SandboxConfig
 from sandbox import mcp_client as mcp
 from sandbox.supervisor import LocalSandbox
 
+def repl(sandbox):
+    """Run one statement per line, until the terminal sends EOF.
+
+    Args:
+        sandbox: The LocalSandbox that executes each statement.
+    """
+    print("Agent Smith sandbox. One statement per line, Ctrl+D to exit.")
+    while True:
+        try:
+            code = input(">>> ")
+        except EOFError:
+            print()
+            return
+        if code.strip():
+            print(sandbox.run(code))
 
 def main():
     parser = argparse.ArgumentParser(description="Agent Smith Sandbox CLI")
@@ -50,12 +65,14 @@ def main():
             mcp_tools=tools,
         )
 
-        # Read the code payload from stdin, then run
-        code = sys.stdin.read()
-        observation = sandbox.run(code)
-
-        # Print cleanly to stdout — no sandbox logging mixed in
-        print(observation, end="")
+        # A terminal gets a prompt and one statement at a time. A pipe
+        # carries a whole payload, which runs in a single go.
+        if sys.stdin.isatty():
+            repl(sandbox)
+        else:
+            observation = sandbox.run(sys.stdin.read())
+            # Print cleanly to stdout: no sandbox logging mixed in
+            print(observation, end="")
 
     except Exception as exc:
         # Graceful fallback: never crash silently during evaluation
