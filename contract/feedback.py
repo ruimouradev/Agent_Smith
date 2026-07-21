@@ -13,6 +13,14 @@ NO_CODE = (
     "No python code block found in your reply. "
     "Reply with a short thought and one ```python code block."
 )
+NO_OUTPUT = (
+    "The code ran without errors and printed nothing. "
+    "Wrap the value you want to see in print(...)."
+)
+MALFORMED_BLOCK = (
+    "[Your code block was never closed, so it was read to the end of "
+    "the reply and run anyway. Close it with ``` next time.]\n"
+)
 # placed in the history instead of an empty model reply: providers
 # reject an assistant message with no content
 EMPTY_REPLY = "(no output)"

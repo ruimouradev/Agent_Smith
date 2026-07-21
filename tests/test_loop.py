@@ -145,22 +145,25 @@ def test_output_cap_follows_the_remaining_budget(mbpp_task, tmp_path):
     ])
     run(profile, FakeSandbox(), provider, budget(),
         tmp_path / "solution.json")
-    # the 500 per-step ceiling binds before the 1500 total budget
-    assert provider.caps == [500, 500]
+    cap = profile.max_step_output_tokens
+    # the per-step ceiling binds while the total budget is still large
+    assert provider.caps == [cap, cap]
 
 
 def test_step_cap_never_exceeds_the_remaining_budget(mbpp_task, tmp_path):
     """Near the end of the output budget, the remaining total binds
     and the request is capped below the per-step ceiling."""
     profile = mbpp_profile(mbpp_task)
+    cap = profile.max_step_output_tokens
     provider = ScriptedProvider(
         ["```python\nprint(1)\n```"] * 2
         + ["```python\nfinal_answer('ok')\n```"],
-        output_costs=[700, 700, 50])
+        output_costs=[cap, cap, 50])
     run(profile, FakeSandbox(), provider, budget(),
         tmp_path / "solution.json")
-    # 1500 total: after 700+700 spent only 100 remain for the call
-    assert provider.caps == [500, 500, 100]
+    # two calls at the ceiling leave less than a ceiling for the third
+    left = profile.max_output_tokens - 2 * cap
+    assert provider.caps == [cap, cap, left]
 
 
 def test_totals_never_exceed_the_input_limit(mbpp_task, tmp_path):

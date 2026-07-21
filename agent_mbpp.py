@@ -27,14 +27,20 @@ _TOOLS_SERVER = Path(__file__).parent / "mcp_tools_mbpp.py"
 # appended to the manual generated from the discovered tool schemas
 _MANUAL_EXTRA = (
     "\n"
-    "Usage notes:\n"
-    "- run_tests returns a JSON string: read it and check that "
-    "\"success\" is true.\n"
-    "- Pass the task's assert lines as test_list.\n"
-    "- Only printed values reach you: call tools as "
-    "print(run_tests(...)).\n"
-    "- final_answer(answer): ends the task; answer is the full "
-    "function source code as a string."
+    "Notes:\n"
+    "- run_tests ignores the test_list you pass and always runs the "
+    "task's own asserts, so leave it empty and trust its verdict.\n"
+    "- final_answer(answer) ends the task, with the function source "
+    "code as a string.\n"
+    "\n"
+    "Test and submit in the same block whenever you can:\n"
+    "\n"
+    "code = '''def f(x):\n"
+    "    return x + 1'''\n"
+    "result = run_tests(code=code, test_list=[])\n"
+    "print(result)\n"
+    "if '\"success\": true' in result:\n"
+    "    final_answer(code)"
 )
 
 
@@ -61,12 +67,41 @@ def main() -> None:
         budget = Budget(profile.max_iterations, profile.max_input_tokens,
                         profile.max_output_tokens, profile.max_seconds)
         client = _connect_tools()
-        run(profile, _make_sandbox(client), provider, budget, args.output)
+        sandbox = _make_sandbox(_PinnedTests(client, task.test_list))
+        run(profile, sandbox, provider, budget, args.output)
     except Exception as exc:  # before the loop: still write a solution
         _write_failure(args.output, task_id, f"{type(exc).__name__}: {exc}")
     finally:
         if client is not None:
             client.close()
+
+
+class _PinnedTests:
+    """MCP client that runs run_tests against the task's own asserts.
+
+    The model writes the test_list itself and sometimes edits an
+    expected value until the test matches its code. Pinning the list
+    keeps the verdict tied to the task.
+    """
+
+    def __init__(self, client, tests: list[str]):
+        """Wrap a connected client and keep the task's assert lines."""
+        self._client = client
+        self._tests = tests
+
+    def call_tool(self, name: str, arguments: dict) -> str:
+        """Forward the call, with the task's tests on run_tests."""
+        if name == "run_tests":
+            arguments = dict(arguments, test_list=self._tests)
+        return self._client.call_tool(name, arguments)
+
+    def list_tools(self) -> list[dict]:
+        """Expose the server's tools unchanged."""
+        return self._client.list_tools()
+
+    def close(self) -> None:
+        """Close the wrapped session."""
+        self._client.close()
 
 
 def _connect_tools():

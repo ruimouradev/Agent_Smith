@@ -10,7 +10,7 @@ or an exception), a valid solution.json is always written.
 import time
 from pathlib import Path
 
-from agent.extract import extract
+from agent.extract import extract, was_recovered
 from contract import SolutionOutput, StepMetrics, feedback
 from contract.protocols import Sandbox
 
@@ -71,7 +71,11 @@ def run(profile, sandbox: Sandbox, provider, budget,
             else:
                 observation = sandbox.run(code)
 
-            final = observation.startswith(feedback.FINAL_PREFIX)
+            final = feedback.FINAL_PREFIX in observation
+            # a block read past its missing fence still runs, with a
+            # note so the model knows its code may have been cut
+            if code and not final and was_recovered(reply.text):
+                observation = feedback.MALFORMED_BLOCK + observation
             steps.append(StepMetrics(
                 step=len(steps) + 1,
                 input_tokens=reply.input_tokens,
@@ -86,7 +90,10 @@ def run(profile, sandbox: Sandbox, provider, budget,
             ))
 
             if final:
-                solution = observation[len(feedback.FINAL_PREFIX):]
+                # the answer follows the last marker, so anything
+                # printed before it stays out of the solution
+                mark = observation.rfind(feedback.FINAL_PREFIX)
+                solution = observation[mark + len(feedback.FINAL_PREFIX):]
                 success = True
                 break
 

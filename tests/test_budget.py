@@ -30,6 +30,16 @@ def test_is_last_by_token_growth():
     assert budget.is_last()          # 2300 left, next ~2850
 
 
+def test_is_last_by_output_running_out():
+    """Writing the final answer spends output, so the warning has to
+    arrive while there is still output budget to write it with."""
+    budget = Budget(10, 10**6, 1_500, 120.0)
+    budget.spend(receipt(100, 400))
+    assert not budget.is_last()      # 1100 left, next ~600
+    budget.spend(receipt(100, 600))
+    assert budget.is_last()          # 500 left, next ~900
+
+
 def test_is_last_by_iteration_count():
     """The iteration before the cap is announced as the last one."""
     budget = Budget(3, 10**6, 10**6, 60.0)
