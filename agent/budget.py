@@ -32,6 +32,7 @@ class Budget:
         self.input_tokens = 0
         self.output_tokens = 0
         self.last_input_cost = 0
+        self.last_output_cost = 0
         self.last_iter_seconds = 0.0
         self.start = time.monotonic()
         self._mark = self.start
@@ -58,15 +59,18 @@ class Budget:
         """
         Return True when the next iteration is the last affordable one.
 
-        Two triggers: the iteration count, or the remaining input
-        tokens. The context only grows (the reply and the observation
-        are appended every turn), so the next call costs more than the
-        previous one; the 1.5 factor is that growth margin.
+        Three triggers: the iteration count, the remaining input
+        tokens, and the remaining output tokens, which the final
+        answer also spends. The context only grows (the reply and the
+        observation are appended every turn), so the next call costs
+        more than the previous one, and 1.5 is that growth margin.
         """
         by_count = self.iterations == self.max_iterations - 1
-        remaining = self.max_input_tokens - self.input_tokens
-        by_tokens = 0 < self.last_input_cost * 1.5 >= remaining
-        return by_count or by_tokens
+        left_in = self.max_input_tokens - self.input_tokens
+        by_input = 0 < self.last_input_cost * 1.5 >= left_in
+        left_out = self.max_output_tokens - self.output_tokens
+        by_output = 0 < self.last_output_cost * 1.5 >= left_out
+        return by_count or by_input or by_output
 
     def spend(self, reply) -> None:
         """Count one iteration and add the receipt of its LLM call."""
@@ -77,6 +81,7 @@ class Budget:
         self.input_tokens += reply.input_tokens
         self.output_tokens += reply.output_tokens
         self.last_input_cost = reply.input_tokens
+        self.last_output_cost = reply.output_tokens
 
     def remaining_output(self) -> int:
         """Output tokens still spendable: the hard cap for one call."""

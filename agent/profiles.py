@@ -22,13 +22,13 @@ Observation. Never write the Observation yourself.
 {manual}
 
 Rules:
-- Only printed output reaches you: wrap calls in print(...), a bare
-  expression shows nothing.
+- Only printed output reaches you, so wrap calls in print(...).
 - Define exactly the function asked for.
-- Check it with run_tests before answering.
-- Only after run_tests reports "success": true, call final_answer
-  with the full function source code as a string; submitting
-  unchecked or failing code counts as wrong.
+- The tests you are shown are a sample. Write the function the
+  description asks for, general enough to hold for other inputs,
+  and use every parameter it declares.
+- Call final_answer only after run_tests reports "success": true.
+  Submitting unchecked or failing code counts as wrong.
 """
 
 _SWEBENCH_TEMPLATE = """You are an autonomous software engineer. You \
@@ -103,7 +103,7 @@ def mbpp_profile(task: MBPPTaskInput) -> Profile:
         max_iterations=10,
         max_input_tokens=6_000,
         max_output_tokens=1_500,
-        max_step_output_tokens=500,
+        max_step_output_tokens=700,
         max_seconds=110.0,  # margin under the 120s wall clock
         request_timeout=60.0,  # a hung call must leave room to retry
         template=_MBPP_TEMPLATE,
