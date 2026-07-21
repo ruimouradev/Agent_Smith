@@ -175,12 +175,12 @@ def generate_manual(tools: list[dict]) -> str:
         lines.append(f"  {name}({_params_str(props, required)})")
         if desc:
             lines.append(f"    {desc}")
+        # the signature line above already carries the names and types,
+        # so only a parameter with its own description adds anything
         for param, spec in props.items():
-            ptype = spec.get("type", "any")
             pdesc = spec.get("description", "")
-            req_marker = " [required]" if param in required else ""
-            detail = f" — {pdesc}" if pdesc else ""
-            lines.append(f"    - {param}: {ptype}{req_marker}{detail}")
+            if pdesc:
+                lines.append(f"    - {param}: {pdesc}")
         lines.append("")
 
     return "\n".join(lines)

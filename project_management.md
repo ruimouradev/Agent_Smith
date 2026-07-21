@@ -37,7 +37,7 @@ Alexandre:
 3 - sandbox/cli.py - OK
 4 - sandbox/mcp_client.py - OK
 5 - mcp_tools_mbpp.py - OK
-6 - mcp_tools_swebench.py
+6 - mcp_tools_swebench.py - OK
 7 - README.md
 
 Rui:
