@@ -62,7 +62,8 @@ def run(profile, sandbox: Sandbox, provider, budget,
             # under its limit and a single reply cannot spend it all
             max_tokens = min(budget.remaining_output(),
                              profile.max_step_output_tokens)
-            reply = provider.generate(messages, profile.stop, max_tokens)
+            reply = provider.generate(_recent(messages, profile.max_turns),
+                                      profile.stop, max_tokens)
             budget.spend(reply)
 
             code = extract(reply.text)
@@ -110,6 +111,11 @@ def run(profile, sandbox: Sandbox, provider, budget,
             error = "Budget exhausted before final_answer."
     except Exception as exc:  # never crash: report it in solution.json
         error = f"{type(exc).__name__}: {exc}"
+    except BaseException as exc:
+        # an interrupt travels past the clause above, and the run would
+        # otherwise be filed as a failure with no reason given
+        error = f"{type(exc).__name__}: {exc}"
+        raise
     finally:
         result = SolutionOutput.from_steps(
             task_id=profile.task_id,
@@ -123,6 +129,27 @@ def run(profile, sandbox: Sandbox, provider, budget,
         )
         Path(output_path).write_text(result.model_dump_json(indent=2))
     return result
+
+
+def _recent(messages: list[dict], max_turns: int) -> list[dict]:
+    """
+    Keep the opening of the conversation and its latest turns.
+
+    The system prompt and the task statement always travel, so the
+    model never loses what it was asked. Older attempts are dropped
+    once there are more than max_turns of them, which holds the input
+    cost of a long run roughly flat.
+
+    Args:
+        messages: The whole conversation so far.
+        max_turns: How many of the latest messages to carry along.
+
+    Returns:
+        The messages to send on this call.
+    """
+    if len(messages) <= max_turns + 2:
+        return messages
+    return messages[:2] + messages[-max_turns:]
 
 
 def _truncate(text: str, limit: int) -> str:

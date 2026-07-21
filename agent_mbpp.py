@@ -17,7 +17,7 @@ from agent.budget import Budget
 from agent.loop import run
 from agent.profiles import mbpp_profile
 from agent.providers import from_config
-from contract import MBPPTaskInput, SandboxConfig, SolutionOutput
+from contract import MBPPTaskInput, SandboxConfig, SolutionOutput, feedback
 from contract.protocols import Sandbox
 
 # anchored to this file, so the entry point works from any cwd
@@ -27,20 +27,21 @@ _TOOLS_SERVER = Path(__file__).parent / "mcp_tools_mbpp.py"
 # appended to the manual generated from the discovered tool schemas
 _MANUAL_EXTRA = (
     "\n"
-    "Notes:\n"
-    "- run_tests ignores the test_list you pass and always runs the "
-    "task's own asserts, so leave it empty and trust its verdict.\n"
-    "- final_answer(answer) ends the task, with the function source "
-    "code as a string.\n"
-    "\n"
-    "Test and submit in the same block whenever you can:\n"
+    "run_tests always runs the task's own asserts: pass test_list=[].\n"
+    "final_answer(code) submits, and is refused if the asserts fail.\n"
+    "Test and submit in one block:\n"
     "\n"
     "code = '''def f(x):\n"
     "    return x + 1'''\n"
-    "result = run_tests(code=code, test_list=[])\n"
-    "print(result)\n"
-    "if '\"success\": true' in result:\n"
+    "r = run_tests(code=code, test_list=[])\n"
+    "print(r)\n"
+    "if '\"success\": true' in r:\n"
     "    final_answer(code)"
+)
+
+# replaces the marker when the submitted answer does not pass
+_REJECTED = (
+    "\nThe answer was not accepted: the task's tests fail on it.\n"
 )
 
 
@@ -67,7 +68,8 @@ def main() -> None:
         budget = Budget(profile.max_iterations, profile.max_input_tokens,
                         profile.max_output_tokens, profile.max_seconds)
         client = _connect_tools()
-        sandbox = _make_sandbox(_PinnedTests(client, task.test_list))
+        pinned = _PinnedTests(client, task.test_list)
+        sandbox = _CheckedAnswer(_make_sandbox(pinned), pinned)
         run(profile, sandbox, provider, budget, args.output)
     except Exception as exc:  # before the loop: still write a solution
         _write_failure(args.output, task_id, f"{type(exc).__name__}: {exc}")
@@ -102,6 +104,42 @@ class _PinnedTests:
     def close(self) -> None:
         """Close the wrapped session."""
         self._client.close()
+
+
+class _CheckedAnswer:
+    """Sandbox that lets an answer through only once it passes.
+
+    final_answer ends the task the moment the code calls it, so a
+    model that skips run_tests submits work nobody checked. The task's
+    asserts run against the answer, and a failing one turns the
+    submission back into an ordinary observation.
+    """
+
+    def __init__(self, sandbox: Sandbox, client):
+        """Wrap the sandbox and the client that runs the asserts."""
+        self._sandbox = sandbox
+        self._client = client
+        self.manual = sandbox.manual
+
+    def run(self, code: str) -> str:
+        """Execute the code, holding back an answer that fails."""
+        observation = self._sandbox.run(code)
+        mark = observation.rfind(feedback.FINAL_PREFIX)
+        if mark < 0:
+            return observation
+
+        answer = observation[mark + len(feedback.FINAL_PREFIX):]
+        verdict = self._client.call_tool(
+            "run_tests", {"code": answer, "test_list": []})
+        try:
+            passed = bool(json.loads(verdict).get("success"))
+        except ValueError:
+            passed = False
+        if passed:
+            return observation
+        # dropping the marker keeps the loop running, and what the
+        # code printed before submitting stays in view
+        return observation[:mark] + _REJECTED + verdict
 
 
 def _connect_tools():

@@ -14,8 +14,9 @@ NO_CODE = (
     "Reply with a short thought and one ```python code block."
 )
 NO_OUTPUT = (
-    "The code ran without errors and printed nothing. "
-    "Wrap the value you want to see in print(...)."
+    "The code ran without errors and printed nothing, so no tool was "
+    "called. Check that the ''' of your code string closes before the "
+    "call, and wrap the value you want to see in print(...)."
 )
 MALFORMED_BLOCK = (
     "[Your code block was never closed, so it was read to the end of "

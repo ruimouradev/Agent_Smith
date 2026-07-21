@@ -1,10 +1,13 @@
 """Tests for agent.providers: key handling, rotation and fail-loud."""
 
+import json
+
+import httpx
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from openai import RateLimitError
+from openai import InternalServerError, NotFoundError, RateLimitError
 
 from agent.providers import Provider, _split_keys, from_config
 
@@ -71,16 +74,16 @@ ALL_KEY_VARS = ("MISTRAL_API_KEY", "GROQ_API_KEY",
                 "GEMINI_API_KEY", "OPENROUTER_API_KEY")
 
 
-def test_from_config_falls_through_and_takes_overrides(monkeypatch):
-    """No key for the first provider: the next one is used; the
-    model/url overrides win over the file."""
+def test_from_config_falls_through_and_takes_the_model_override(monkeypatch):
+    """No key for the first provider: the next one is used, and the
+    model override wins over the file."""
     for var in ALL_KEY_VARS:
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("GROQ_API_KEY", "gk")
-    provider = from_config(MODELS_JSON, model="X", base_url="http://u")
+    provider = from_config(MODELS_JSON, model="X")
     assert provider.model == "X"
-    assert provider.base_url == "http://u"
     assert provider.keys == ["gk"]
+    assert "groq" in provider.base_url
 
 
 def test_from_config_without_any_key_names_the_vars(monkeypatch):
@@ -172,3 +175,69 @@ def test_none_content_becomes_empty_text():
         usage=SimpleNamespace(prompt_tokens=1, completion_tokens=0))
     provider = stubbed_provider(ChatStub(response=none_content), ["k"])
     assert provider.generate([], stop=[]).text == ""
+
+
+def test_provider_url_selects_its_own_keys(tmp_path, monkeypatch):
+    """The chosen endpoint brings its own key, instead of the first
+    configured provider's."""
+    config = tmp_path / "models.json"
+    config.write_text(json.dumps({"providers": [
+        {"name": "a", "base_url": "https://a/v1", "model": "ma",
+         "keys_env": "KEY_A"},
+        {"name": "b", "base_url": "https://b/v1", "model": "mb",
+         "keys_env": "KEY_B"},
+    ]}))
+    monkeypatch.setenv("KEY_A", "ka")
+    monkeypatch.setenv("KEY_B", "kb")
+    provider = from_config(config, base_url="https://b/v1")
+    assert provider.keys == ["kb"]
+    assert provider.model == "mb"
+
+
+def test_unknown_provider_url_is_rejected(tmp_path, monkeypatch):
+    """An endpoint with no entry raises, instead of borrowing another
+    provider's credentials."""
+    config = tmp_path / "models.json"
+    config.write_text(json.dumps({"providers": [
+        {"name": "a", "base_url": "https://a/v1", "model": "ma",
+         "keys_env": "KEY_A"},
+    ]}))
+    monkeypatch.setenv("KEY_A", "ka")
+    with pytest.raises(RuntimeError, match="no provider configured"):
+        from_config(config, base_url="https://nowhere/v1")
+
+
+def test_client_error_is_not_retried(monkeypatch):
+    """A 404 answers the same every time, so it must not spend the
+    time budget being asked again."""
+    provider = Provider("http://u", "m", ["k"], pause_seconds=0.0)
+    calls = []
+
+    def always_404(**kwargs):
+        calls.append(1)
+        raise NotFoundError("no such model", response=httpx.Response(
+            404, request=httpx.Request("POST", "http://u")), body=None)
+
+    monkeypatch.setattr(provider._client.chat.completions, "create",
+                        always_404)
+    with pytest.raises(NotFoundError):
+        provider.generate([{"role": "user", "content": "x"}], [])
+    assert len(calls) == 1
+
+
+def test_server_error_is_retried(monkeypatch):
+    """A 500 may be transient, so it is worth asking again."""
+    provider = Provider("http://u", "m", ["k"], max_attempts=3,
+                        pause_seconds=0.0)
+    calls = []
+
+    def always_500(**kwargs):
+        calls.append(1)
+        raise InternalServerError("boom", response=httpx.Response(
+            500, request=httpx.Request("POST", "http://u")), body=None)
+
+    monkeypatch.setattr(provider._client.chat.completions, "create",
+                        always_500)
+    with pytest.raises(InternalServerError):
+        provider.generate([{"role": "user", "content": "x"}], [])
+    assert len(calls) == 3
