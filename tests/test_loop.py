@@ -38,7 +38,7 @@ class ScriptedProvider:
         self.calls: list[list[str]] = []
         self.caps: list[int] = []
 
-    def generate(self, messages, stop, max_tokens=None):
+    def generate(self, messages, stop, max_tokens=None, temperature=None):
         """Pop the next scripted reply and note what the model saw."""
         self.calls.append([m["content"] for m in messages])
         self.caps.append(max_tokens)
@@ -52,7 +52,7 @@ class ScriptedProvider:
 class CrashingProvider:
     """Raises on every call, like an API that is down."""
 
-    def generate(self, messages, stop, max_tokens=None):
+    def generate(self, messages, stop, max_tokens=None, temperature=None):
         """Always fail."""
         raise RuntimeError("api down")
 
@@ -130,7 +130,7 @@ def test_interrupt_is_recorded_and_still_propagates(mbpp_task, tmp_path):
     class InterruptingProvider:
         """Raises the exception a Ctrl+C delivers."""
 
-        def generate(self, messages, stop, max_tokens=None):
+        def generate(self, messages, stop, max_tokens=None, temperature=None):
             """Interrupt the run on the first call."""
             raise KeyboardInterrupt()
 

@@ -54,7 +54,7 @@ def stubbed_provider(chat: ChatStub, keys: list[str], **kwargs) -> Provider:
 
 
 def test_split_multiple_keys(monkeypatch):
-    """Commas separate keys; whitespace and empties are dropped."""
+    """Commas separate keys, and whitespace and empties are dropped."""
     monkeypatch.setenv("TEST_KEYS", " a, b ,c,")
     assert _split_keys("TEST_KEYS") == ["a", "b", "c"]
 
@@ -132,14 +132,17 @@ def test_no_choices_fails_loudly():
         provider.generate([], stop=[])
 
 
-def test_missing_usage_fails_loudly():
-    """Metrics are mandatory: no usage means an error, not zeros."""
+def test_missing_usage_is_estimated_not_fatal():
+    """An endpoint that omits usage must not end the run: the counts are
+    estimated from the text instead of raising."""
     no_usage = SimpleNamespace(
-        choices=[SimpleNamespace(message=SimpleNamespace(content="hi"))],
+        choices=[SimpleNamespace(message=SimpleNamespace(content="hello world"))],
         usage=None)
     provider = stubbed_provider(ChatStub(response=no_usage), ["k"])
-    with pytest.raises(RuntimeError, match="usage"):
-        provider.generate([], stop=[])
+    reply = provider.generate([{"role": "user", "content": "hi there"}], stop=[])
+    assert reply.text == "hello world"
+    assert reply.input_tokens >= 1
+    assert reply.output_tokens >= 1
 
 
 def test_client_owns_no_retries_and_a_finite_timeout():
@@ -166,6 +169,25 @@ def test_max_tokens_is_forwarded_to_the_api():
     provider = stubbed_provider(chat, ["k"])
     provider.generate([], stop=[], max_tokens=321)
     assert chat.kwargs["max_tokens"] == 321
+
+
+def test_temperature_is_forwarded_only_when_set():
+    """A temperature reaches the API; None leaves the key out entirely,
+    so the endpoint keeps its own default."""
+    class Recording(ChatStub):
+        """ChatStub that keeps the kwargs of each call."""
+
+        def create(self, **kwargs):
+            """Record kwargs, then answer normally."""
+            self.kwargs = kwargs
+            return super().create(**kwargs)
+
+    chat = Recording()
+    provider = stubbed_provider(chat, ["k"])
+    provider.generate([], stop=[], temperature=0.2)
+    assert chat.kwargs["temperature"] == 0.2
+    provider.generate([], stop=[])
+    assert "temperature" not in chat.kwargs
 
 
 def test_none_content_becomes_empty_text():
@@ -241,3 +263,15 @@ def test_server_error_is_retried(monkeypatch):
     with pytest.raises(InternalServerError):
         provider.generate([{"role": "user", "content": "x"}], [])
     assert len(calls) == 3
+
+
+def test_reasoning_block_content_becomes_text():
+    """A reasoning model returns typed blocks. The reply carries the
+    text ones joined, and never the raw list that would crash extract."""
+    blocks = [{"type": "thinking", "thinking": "hmm"},
+              {"type": "text", "text": "def f(): return 1"}]
+    msg = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content=blocks))],
+        usage=SimpleNamespace(prompt_tokens=5, completion_tokens=3))
+    provider = stubbed_provider(ChatStub(response=msg), ["k"])
+    assert provider.generate([], stop=[]).text == "def f(): return 1"
