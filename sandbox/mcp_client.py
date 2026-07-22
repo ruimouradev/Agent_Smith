@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 import shlex
 import threading
 from contextlib import AsyncExitStack
@@ -57,7 +58,10 @@ class MCPClient:
         self._run(self._connect_http(url))
 
     async def _connect_stdio(self, executable: str, args: list) -> None:
-        params = StdioServerParameters(command=executable, args=args)
+        # the SDK gives the server a minimal environment unless one is
+        # passed, dropping the container id the tools read
+        params = StdioServerParameters(command=executable, args=args,
+                                       env=dict(os.environ))
         self._exit_stack = AsyncExitStack()
         read, write = await self._exit_stack.enter_async_context(stdio_client(params))
         self._session = await self._exit_stack.enter_async_context(

@@ -27,24 +27,31 @@ _TESTBED: str = os.environ.get("TESTBED_PATH", "/testbed")
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _exec(cmd: str, workdir: str | None = None) -> tuple[int, str]:
+def _exec(cmd: str, workdir: str | None = None,
+          stdin: str | None = None) -> tuple[int, str]:
     """
     Run a shell command in the testbed context.
 
     If SWEBENCH_CONTAINER is set, execute inside the Docker container.
     Otherwise, run directly as a subprocess in the local testbed directory.
+    A large payload goes through stdin, which has no length limit, unlike
+    a command-line argument capped by ARG_MAX.
     """
     try:
         if _CONTAINER:
             cwd = workdir or "/testbed"
+            docker_cmd = ["docker", "exec", "-w", cwd]
+            if stdin is not None:
+                docker_cmd.append("-i")
+            docker_cmd += [_CONTAINER, "bash", "-c", cmd]
             r = subprocess.run(
-                ["docker", "exec", "-w", cwd, _CONTAINER, "bash", "-c", cmd],
+                docker_cmd, input=stdin,
                 capture_output=True, text=True, timeout=60,
             )
         else:
             cwd = workdir or _TESTBED
             r = subprocess.run(
-                cmd, shell=True, cwd=cwd,
+                cmd, shell=True, cwd=cwd, input=stdin,
                 capture_output=True, text=True, timeout=60,
             )
         return r.returncode, r.stdout + r.stderr
@@ -76,11 +83,14 @@ def _write_raw(filepath: str, content: str) -> tuple[bool, str]:
     """Write raw file content. Returns (ok, error_or_empty)."""
     if _CONTAINER:
         encoded = base64.b64encode(content.encode()).decode()
+        # the payload travels on stdin: a whole source file in base64
+        # overflows the command-line length limit
         code, err = _exec(
             f"python3 -c \""
-            f"import base64, pathlib; "
+            f"import base64, sys, pathlib; "
             f"pathlib.Path('{filepath}').write_bytes("
-            f"base64.b64decode('{encoded}'))\""
+            f"base64.b64decode(sys.stdin.read()))\"",
+            stdin=encoded,
         )
         return code == 0, err
     path = _resolve(filepath)
@@ -272,14 +282,17 @@ def run_tests() -> str:
     if not _EVAL_SCRIPT:
         return "No eval script configured (SWEBENCH_EVAL_SCRIPT not set)."
     if _CONTAINER:
-        code, output = _exec(f"bash {_EVAL_SCRIPT}")
+        # 2>&1 keeps stdout and stderr in emission order, so the summary
+        # reads in sequence instead of after a separate stderr block
+        code, output = _exec(f"bash {_EVAL_SCRIPT} 2>&1")
     else:
         try:
             r = subprocess.run(
                 ["bash", _EVAL_SCRIPT],
-                capture_output=True, text=True, timeout=300,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, timeout=300,
             )
-            output = r.stdout + r.stderr
+            output = r.stdout
         except subprocess.TimeoutExpired:
             output = "Eval script timed out (>300s)."
         except Exception as exc:
