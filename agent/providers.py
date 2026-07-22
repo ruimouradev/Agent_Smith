@@ -60,7 +60,8 @@ class Provider:
         self._client = self._build_client()
 
     def generate(self, messages: list[dict], stop: list[str],
-                 max_tokens: int | None = None) -> Reply:
+                 max_tokens: int | None = None,
+                 temperature: float | None = None) -> Reply:
         """
         Ask the model for the next reply.
 
@@ -69,21 +70,24 @@ class Provider:
             stop: Stop sequences that end the generation.
             max_tokens: Server-side cap on the reply length, so one
                 call can never blow the cumulative output limit.
+            temperature: Sampling temperature. Left out when None, so
+                the endpoint keeps its own default.
 
         Returns:
             A Reply with the text and its cost, taken from the
             server-side usage counts.
         """
+        # temperature is only sent when set, so a None keeps the call
+        # identical to one that never named the parameter
+        kwargs: dict = {"model": self.model, "messages": cast(Any, messages),
+                        "stop": stop, "max_tokens": max_tokens}
+        if temperature is not None:
+            kwargs["temperature"] = temperature
         start = time.monotonic()
         attempts = 0
         while True:
             try:
-                response = self._client.chat.completions.create(
-                    model=self.model,
-                    messages=cast(Any, messages),
-                    stop=stop,
-                    max_tokens=max_tokens,
-                )
+                response = self._client.chat.completions.create(**kwargs)
                 break
             except RateLimitError:
                 attempts += 1
@@ -108,19 +112,26 @@ class Provider:
                 if attempts >= self.max_attempts:
                     raise
                 time.sleep(self.pause_seconds)
-        usage = response.usage
-        # the budget and the step metrics are built from these counts,
-        # and without them the limits cannot be enforced
-        if usage is None:
-            raise RuntimeError(f"{self.base_url} returned no usage counts")
-        # some providers return no choices on filtered/failed generations
+        # no choices means no answer to act on, so this still fails loud
         if not response.choices:
             raise RuntimeError(f"{self.base_url} returned no choices")
+        text = _as_text(response.choices[0].message.content)
+        usage = response.usage
+        # some endpoints (seen on the OpenRouter free tier) return no
+        # usage counts; the counts are estimated from the text so a
+        # missing metric never ends the task. Mistral always reports
+        # usage, so the graded path keeps its exact numbers.
+        if usage is not None:
+            input_tokens = usage.prompt_tokens
+            output_tokens = usage.completion_tokens
+        else:
+            input_tokens = sum(_estimate_tokens(_as_text(m.get("content")))
+                               for m in messages)
+            output_tokens = _estimate_tokens(text)
         return Reply(
-            # the SDK may give content=None and extract() handles ""
-            text=response.choices[0].message.content or "",
-            input_tokens=usage.prompt_tokens,
-            output_tokens=usage.completion_tokens,
+            text=text,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
             time_ms=(time.monotonic() - start) * 1000,
             retries=attempts,
             api_url=self.base_url,
@@ -142,6 +153,35 @@ class Provider:
         """Switch to the next key (circular: k1 -> k2 -> ... -> k1)."""
         self.active = (self.active + 1) % len(self.keys)
         self._client = self._build_client()
+
+
+def _estimate_tokens(text: str) -> int:
+    """Approximate a token count from length, about four chars per token.
+
+    Used only when an endpoint omits usage, to keep the run alive with a
+    rough figure instead of no figure at all.
+    """
+    return max(1, len(text) // 4)
+
+
+def _as_text(content) -> str:
+    """
+    Reduce a message's content to plain text.
+
+    Most providers return a string (or None). Reasoning models return
+    a list of typed blocks; the text ones are joined and the rest, such
+    as thinking blocks, are dropped. Anything else degrades to an empty
+    string, so an unexpected shape never crashes the run.
+    """
+    if isinstance(content, str):
+        return content
+    if content is None:
+        return ""
+    if isinstance(content, list):
+        parts = [b.get("text", "") for b in content
+                 if isinstance(b, dict) and b.get("type") == "text"]
+        return "".join(parts)
+    return ""
 
 
 def from_config(path: str | Path, model: str | None = None,

@@ -12,14 +12,14 @@ import json
 import os
 import shlex
 import sys
-import tempfile
 from pathlib import Path
 
 from agent.budget import Budget
 from agent.loop import run
 from agent.profiles import swe_profile
 from agent.providers import from_config
-from contract import SandboxConfig, SolutionOutput, SWEBenchTaskInput
+from contract import (SandboxConfig, SolutionOutput, SWEBenchTaskInput,
+                      feedback)
 from contract.protocols import Sandbox
 
 # anchored to this file, so the entry point works from any cwd
@@ -30,13 +30,31 @@ _TOOLS_SERVER = Path(__file__).parent / "mcp_tools_swebench.py"
 _MANUAL_EXTRA = (
     "\n"
     "Usage notes:\n"
-    "- Only printed values reach you: call tools as "
-    "print(read_file(...)).\n"
-    "- run_tests() runs the task's own test suite inside the "
-    "repository; read its output before finishing.\n"
-    "- When the fix is done, call final_answer(get_patch()) to "
-    "submit the git patch."
+    "- Wrap every tool call in print(...), edits included: "
+    "print(edit_file(...)) shows whether it applied.\n"
+    "- Before edit_file, read_file the exact lines and copy the old "
+    "text verbatim. A from-memory old string usually misses and "
+    "costs the step.\n"
+    "- run_tests() runs the task's own test suite and is the only "
+    "verification that works here: bare python runs and package "
+    "installs usually fail against this container's environment "
+    "and say nothing about your fix. Once run_tests passes, submit "
+    "immediately.\n"
+    "- Apply your fix with edit_file, run_tests to confirm it, then "
+    "submit with final_answer(get_patch()) as the only call in the "
+    "block. Batching it with other calls submits before you have "
+    "seen their result, and a submission that changed nothing is "
+    "refused. The patch is collected from the repository for you, "
+    "so do not write the diff yourself."
 )
+
+# replaces the marker when the submitted diff is empty
+_EMPTY_PATCH = (
+    "\nThe answer was not accepted: the repository has no changes to "
+    "submit. Edit the code to fix the issue, confirm it with run_tests, "
+    "then call final_answer.\n"
+)
+
 
 
 def main() -> None:
@@ -63,8 +81,9 @@ def main() -> None:
         budget = Budget(profile.max_iterations, profile.max_input_tokens,
                         profile.max_output_tokens, profile.max_seconds)
         bridge = _start_bridge(task)
-        client = _connect_tools(bridge, task)
-        run(profile, _make_sandbox(client), provider, budget, args.output)
+        client = _TrimmedTests(_connect_tools(bridge, task))
+        sandbox = _PatchFromContainer(_make_sandbox(client), client)
+        run(profile, sandbox, provider, budget, args.output)
     except Exception as exc:  # before the loop: still write a solution
         _write_failure(args.output, task_id, f"{type(exc).__name__}: {exc}")
     finally:
@@ -72,6 +91,74 @@ def main() -> None:
             client.close()
         if bridge is not None:
             bridge.close()
+
+
+class _TrimmedTests:
+    """MCP client that returns only the test output of run_tests.
+
+    The script wraps its results in "Start Test Output" and "End Test
+    Output" markers, preceded by git status and the full diff. Kept
+    whole, that noise fills the observation and buries the pass/fail
+    lines the model needs.
+    """
+
+    _START = ">>>>> Start Test Output"
+    _END = ">>>>> End Test Output"
+
+    def __init__(self, client):
+        """Wrap a connected client."""
+        self._client = client
+
+    def call_tool(self, name: str, arguments: dict) -> str:
+        """Forward the call, trimming run_tests to its test output."""
+        result = self._client.call_tool(name, arguments)
+        if name != "run_tests":
+            return result
+        start = result.find(self._START)
+        end = result.find(self._END)
+        if start < 0 or end < 0:
+            return result
+        return result[start + len(self._START):end].strip()
+
+    def list_tools(self) -> list[dict]:
+        """Expose the server's tools unchanged."""
+        return self._client.list_tools()
+
+    def close(self) -> None:
+        """Close the wrapped session."""
+        self._client.close()
+
+
+class _PatchFromContainer:
+    """Sandbox that submits the container's real diff, not the model's.
+
+    The model tends to hand-write the patch it passes to final_answer,
+    inventing line numbers that do not match the file, so the diff
+    fails to apply. Replacing the submitted string with get_patch ties
+    the answer to what was actually changed in the repository. A
+    submission that changed nothing is turned back into an observation,
+    since an empty diff cannot carry the fix.
+    """
+
+    def __init__(self, sandbox: Sandbox, client):
+        """Wrap the sandbox and the client that reads the diff."""
+        self._sandbox = sandbox
+        self._client = client
+        self.manual = sandbox.manual
+
+    def run(self, code: str) -> str:
+        """Execute the code, replacing a submitted patch with the diff."""
+        observation = self._sandbox.run(code)
+        mark = observation.rfind(feedback.FINAL_PREFIX)
+        if mark < 0:
+            return observation
+        patch = self._client.call_tool("get_patch", {})
+        if "diff --git" not in patch:
+            # nothing was changed, so the fix is not in place; dropping
+            # the marker keeps the loop running instead of accepting it
+            return observation[:mark] + _EMPTY_PATCH
+        head = observation[:mark + len(feedback.FINAL_PREFIX)]
+        return head + patch
 
 
 def _start_bridge(task: SWEBenchTaskInput):
@@ -85,14 +172,18 @@ def _start_bridge(task: SWEBenchTaskInput):
 def _connect_tools(bridge, task: SWEBenchTaskInput):
     """Launch mcp_tools_swebench.py over stdio and return the client.
 
-    The server acts on the task container: it receives the container
-    id and the path of the eval script through the environment.
+    The server acts on the task container, whose id and paths it
+    receives through the environment.
     """
     from sandbox import mcp_client as mcp
-    eval_path = Path(tempfile.mkstemp(suffix=".eval.sh")[1])
-    eval_path.write_text(task.eval_script)
+    # written inside the container, where the tools run, since a local
+    # path would not resolve there
+    container_path = "/tmp/run_eval.sh"
+    heredoc = (f"cat > {container_path} <<'AGENT_SMITH_EOF'\n"
+               f"{task.eval_script}\nAGENT_SMITH_EOF")
+    bridge.exec(heredoc)
     os.environ["SWEBENCH_CONTAINER"] = bridge.cid
-    os.environ["SWEBENCH_EVAL_SCRIPT"] = str(eval_path)
+    os.environ["SWEBENCH_EVAL_SCRIPT"] = container_path
     # shlex.quote keeps the command whole when the path has spaces
     command = (f"{shlex.quote(sys.executable)} "
                f"{shlex.quote(str(_TOOLS_SERVER))}")
@@ -109,7 +200,9 @@ def _make_sandbox(client) -> Sandbox:
     from sandbox.supervisor import LocalSandbox
     tools = client.list_tools()
     manual = mcp.generate_manual(tools) + _MANUAL_EXTRA
-    return LocalSandbox(SandboxConfig(), manual=manual,
+    # a single tool call here can take minutes, well over the 30s default
+    config = SandboxConfig(max_execution_time_seconds=600)
+    return LocalSandbox(config, manual=manual,
                         mcp_client=client, mcp_tools=tools)
 
 

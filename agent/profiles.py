@@ -45,8 +45,8 @@ Method:
 2. Understand the cause before editing. Reproduce it if you can.
 3. Make the smallest fix that solves the issue.
 4. Run the tests that cover the change.
-5. Call get_patch to collect your diff, then final_answer with the
-   patch string.
+5. Submit with final_answer(get_patch()) as the only call in the
+   block.
 
 Rules:
 - Fix the cause, not the symptom. Do not touch unrelated code.
@@ -75,6 +75,9 @@ class Profile:
     max_seconds: float
     request_timeout: float
     template: str
+    # sampling temperature for this benchmark; None keeps the endpoint
+    # default. A low value steadies the trajectory and its length.
+    temperature: float | None = None
 
     def system_prompt(self, manual: str) -> str:
         """Fill the template with the sandbox tool manual."""

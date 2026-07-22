@@ -15,7 +15,7 @@
     {
       "name": "gemini",
       "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
-      "model": "gemini-2.5-flash",
+      "model": "gemini-flash-latest",
       "keys_env": "GEMINI_API_KEY"
     },
     {
