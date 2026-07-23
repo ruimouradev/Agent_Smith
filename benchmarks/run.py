@@ -8,8 +8,8 @@ exactly as they will be measured. Results land in
 benchmarks/results/<model>/<task>.json (the solution.json evidence
 the report is built on) and a summary table is printed at the end.
 
-The table reports success as claimed by the agent; correctness is
-validated separately with the moulinette.
+The table reports success as claimed by the agent. Final correctness
+is a separate validation step.
 
 Usage:
     uv run python benchmarks/run.py --benchmark mbpp \\
@@ -27,14 +27,17 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def run_one(benchmark: str, task_file: Path, output: Path,
-            model: str | None) -> float:
-    """Run one task in a fresh process; return its wall-clock seconds.
+            model: str | None, provider_url: str | None = None) -> float:
+    """Run one task in a fresh process and return its wall-clock seconds.
 
     Args:
         benchmark: name of the benchmark (selects the entry point).
         task_file: The task.json to solve.
         output: Where the solution.json must be written.
         model: Model override, or None for the configured default.
+        provider_url: Endpoint override. A model served by another
+            provider needs it, since the endpoint is what selects the
+            keys that travel with the request.
 
     Returns:
         Wall-clock duration of the whole process, in seconds.
@@ -43,6 +46,8 @@ def run_one(benchmark: str, task_file: Path, output: Path,
                "--task-file", str(task_file), "--output", str(output)]
     if model:
         command += ["--model-name", model]
+    if provider_url:
+        command += ["--provider-url", provider_url]
     start = time.monotonic()
     subprocess.run(command, cwd=ROOT, capture_output=True)
     return time.monotonic() - start
@@ -76,6 +81,8 @@ def main() -> None:
                              "the configured default once")
     parser.add_argument("--results-dir",
                         default=str(ROOT / "benchmarks" / "results"))
+    parser.add_argument("--provider-url", default=None,
+                        help="endpoint for the models being compared")
     args = parser.parse_args()
 
     task_files = sorted(Path(args.tasks_dir).glob("*.json"))
@@ -92,7 +99,8 @@ def main() -> None:
         out_dir.mkdir(parents=True, exist_ok=True)
         for task_file in task_files:
             output = out_dir / f"{task_file.stem}.solution.json"
-            wall = run_one(args.benchmark, task_file, output, model)
+            wall = run_one(args.benchmark, task_file, output, model,
+                           args.provider_url)
             solution = json.loads(output.read_text())
             results.append({
                 "model": label,
