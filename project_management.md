@@ -48,7 +48,7 @@ Rui:
 4 - agent/providers.py - OK
 5 - agent/profiles.py - OK
 6 - agent_mbpp.py - OK for now
-7 - agent/docker_bridge.py - OK for now
+7 - agent/docker_bridge.py - OK
 8 - agent_swebench.py - OK for now
-9 - tests - WIP
-10 - benchmarks/ + BENCHMARK_REPORT.md
+9 - tests - OK
+10 - benchmarks/ + BENCHMARK_REPORT.md - WIP
