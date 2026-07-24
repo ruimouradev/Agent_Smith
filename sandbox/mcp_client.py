@@ -1,7 +1,10 @@
-"""Alexandre - MCP client: connects to tool server, discovers tools, proxies calls."""
+"""MCP client: connect to a tool server, discover tools, proxy calls.
+
+Wraps an async MCP ClientSession behind a synchronous interface so the
+supervisor can list and call tools without managing an event loop.
+"""
 
 import asyncio
-import json
 import os
 import shlex
 import threading
@@ -30,26 +33,25 @@ class MCPClient:
 
     def __init__(self):
         self._loop = asyncio.new_event_loop()
-        self._thread = threading.Thread(target=self._loop.run_forever, daemon=True)
+        self._thread = threading.Thread(
+            target=self._loop.run_forever, daemon=True)
         self._thread.start()
         self._session: Optional[ClientSession] = None
         self._exit_stack: Optional[AsyncExitStack] = None
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
     def _run(self, coro):
-        """Submit a coroutine to the background loop and block for the result."""
+        """Run a coroutine on the background loop and return its result."""
         future = asyncio.run_coroutine_threadsafe(coro, self._loop)
         return future.result()  # blocks until done; propagates exceptions
 
-    # ------------------------------------------------------------------
-    # Connection
-    # ------------------------------------------------------------------
+    def _require_session(self) -> ClientSession:
+        """Return the live session, or fail if the client is not connected."""
+        if self._session is None:
+            raise RuntimeError("MCP client is not connected")
+        return self._session
 
     def connect_stdio(self, command: str) -> None:
-        """Connect to an MCP server that is launched as a subprocess (stdio)."""
+        """Connect to an MCP server launched as a subprocess (stdio)."""
         parts = shlex.split(command)
         self._run(self._connect_stdio(parts[0], parts[1:]))
 
@@ -63,7 +65,8 @@ class MCPClient:
         params = StdioServerParameters(command=executable, args=args,
                                        env=dict(os.environ))
         self._exit_stack = AsyncExitStack()
-        read, write = await self._exit_stack.enter_async_context(stdio_client(params))
+        read, write = await self._exit_stack.enter_async_context(
+            stdio_client(params))
         self._session = await self._exit_stack.enter_async_context(
             ClientSession(read, write)
         )
@@ -79,17 +82,13 @@ class MCPClient:
         )
         await self._session.initialize()
 
-    # ------------------------------------------------------------------
-    # Protocol operations
-    # ------------------------------------------------------------------
-
     def list_tools(self) -> list[dict]:
         """
         Fetch tool schemas from the connected MCP server.
 
         Returns a list of dicts with keys: name, description, inputSchema.
         """
-        result = self._run(self._session.list_tools())
+        result = self._run(self._require_session().list_tools())
         return [
             {
                 "name": tool.name,
@@ -103,9 +102,10 @@ class MCPClient:
         """
         Call a tool by name with keyword arguments.
 
-        Returns the tool's result as a single string (text blocks joined by newline).
+        Returns the tool's result as a single string, joining any text
+        blocks with newlines.
         """
-        result = self._run(self._session.call_tool(name, arguments))
+        result = self._run(self._require_session().call_tool(name, arguments))
         parts = []
         for block in result.content:
             if hasattr(block, "text"):
@@ -113,10 +113,6 @@ class MCPClient:
             else:
                 parts.append(str(block))
         return "\n".join(parts)
-
-    # ------------------------------------------------------------------
-    # Lifecycle
-    # ------------------------------------------------------------------
 
     def close(self) -> None:
         """Tear down the session and stop the background event loop."""
@@ -135,10 +131,6 @@ class MCPClient:
         self.close()
 
 
-# ------------------------------------------------------------------
-# Module-level helpers used by cli.py
-# ------------------------------------------------------------------
-
 def factory(
     mcp_stdio: Optional[str] = None,
     mcp_server: Optional[str] = None,
@@ -153,7 +145,7 @@ def factory(
     client = MCPClient()
     if mcp_stdio:
         client.connect_stdio(mcp_stdio)
-    else:
+    elif mcp_server:
         client.connect_http(mcp_server)
     return client
 

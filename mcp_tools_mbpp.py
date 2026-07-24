@@ -1,4 +1,9 @@
-"""Alexandre - MBPP MCP tool server: exposes run_tests for the sandbox."""
+"""MCP tool server for MBPP: runs the task assertions against the code.
+
+The single tool executes the candidate solution and the task's
+assertions in a separate process and returns, as JSON, whether they
+all passed together with the output to show the agent.
+"""
 
 import json
 import subprocess

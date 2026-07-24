@@ -1,4 +1,4 @@
-"""Alexandre - sandbox entrypoint: CLI parser."""
+"""Sandbox entry point: parse the CLI and drive one session."""
 
 import sys
 import argparse
@@ -7,6 +7,7 @@ from pathlib import Path
 from contract.models import SandboxConfig
 from sandbox import mcp_client as mcp
 from sandbox.supervisor import LocalSandbox
+
 
 def repl(sandbox):
     """Run one statement per line, until the terminal sends EOF.
@@ -24,31 +25,35 @@ def repl(sandbox):
         if code.strip():
             print(sandbox.run(code))
 
+
 def main():
     parser = argparse.ArgumentParser(description="Agent Smith Sandbox CLI")
-    parser.add_argument("config", nargs="?", default=None, help="Path to config.json")
+    parser.add_argument("config", nargs="?", default=None,
+                        help="Path to config.json")
     parser.add_argument("--mcp-stdio", type=str, default=None,
-                        help="Launch an MCP server as a subprocess (stdio transport)")
+                        help="Launch an MCP server as a subprocess "
+                             "(stdio transport)")
     parser.add_argument("--mcp-server", type=str, default=None,
-                        help="Connect to a running MCP server (streamable-HTTP URL)")
+                        help="Connect to a running MCP server "
+                             "(streamable-HTTP URL)")
 
     args = parser.parse_args()
 
     client = None
     try:
-        # --- Config ---
         if args.config:
             config_path = Path(args.config)
             if not config_path.exists():
-                print(f"Error: config file not found: {args.config}", file=sys.stderr)
+                print(f"Error: config file not found: {args.config}",
+                      file=sys.stderr)
                 sys.exit(1)
-            config = SandboxConfig.model_validate_json(config_path.read_text())
+            config = SandboxConfig.model_validate_json(
+                config_path.read_text())
         else:
             config = SandboxConfig()
 
-        # --- MCP client (Phase 2) ---
-        # factory() returns None when neither flag is provided, so plain sandbox
-        # runs (tests 1-5) are completely unaffected.
+        # factory() returns None when neither flag is given, so a plain
+        # sandbox run (tests 1-5) is completely unaffected.
         client = mcp.factory(args.mcp_stdio, args.mcp_server)
 
         tools: list[dict] = []
@@ -57,7 +62,6 @@ def main():
             tools = client.list_tools()
             manual = mcp.generate_manual(tools)
 
-        # --- Sandbox ---
         sandbox = LocalSandbox(
             config=config,
             manual=manual,
