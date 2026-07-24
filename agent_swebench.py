@@ -56,7 +56,6 @@ _EMPTY_PATCH = (
 )
 
 
-
 def main() -> None:
     """Parse the CLI arguments and drive one SWE-bench task."""
     parser = argparse.ArgumentParser()

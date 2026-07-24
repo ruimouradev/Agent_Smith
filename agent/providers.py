@@ -60,8 +60,7 @@ class Provider:
         self._client = self._build_client()
 
     def generate(self, messages: list[dict], stop: list[str],
-                 max_tokens: int | None = None,
-                 temperature: float | None = None) -> Reply:
+                 max_tokens: int | None = None) -> Reply:
         """
         Ask the model for the next reply.
 
@@ -70,19 +69,13 @@ class Provider:
             stop: Stop sequences that end the generation.
             max_tokens: Server-side cap on the reply length, so one
                 call can never blow the cumulative output limit.
-            temperature: Sampling temperature. Left out when None, so
-                the endpoint keeps its own default.
 
         Returns:
             A Reply with the text and its cost, taken from the
             server-side usage counts.
         """
-        # temperature is only sent when set, so a None keeps the call
-        # identical to one that never named the parameter
         kwargs: dict = {"model": self.model, "messages": cast(Any, messages),
                         "stop": stop, "max_tokens": max_tokens}
-        if temperature is not None:
-            kwargs["temperature"] = temperature
         start = time.monotonic()
         attempts = 0
         while True:
