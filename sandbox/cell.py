@@ -1,8 +1,14 @@
-"""Alexandre - child process: executes LLM code under the restrictions."""
+"""Sandbox child process: runs the agent's code under the restrictions.
+
+Installs the import allowlist, swaps in safe builtins and a path-checked
+open, wires up the MCP tool wrappers, then executes the code the
+supervisor feeds on stdin.
+"""
 
 import sys
 import os
 from contract import feedback
+
 
 class SandboxImportBlocker:
     """
@@ -14,7 +20,7 @@ class SandboxImportBlocker:
     def find_spec(self, fullname, path, target=None):
         if self._is_allowed(fullname):
             return None  # Let the normal import system handle it
-        
+
         raise ModuleNotFoundError(
             feedback.BLOCKED_IMPORT.format(name=fullname,
                                            allowed=", ".join(self.allowed))
@@ -36,7 +42,7 @@ def is_path_allowed(requested_path, allowed_directories):
         real_path = os.path.realpath(requested_path)
     except Exception:
         return False
-    
+
     for allowed_dir in allowed_directories:
         real_allowed = os.path.realpath(allowed_dir)
         # Check if the resolved path is within the allowed directory
@@ -44,42 +50,49 @@ def is_path_allowed(requested_path, allowed_directories):
             return True
     return False
 
+
 def secure_open(allowed_directories):
     # Get original open
     import builtins
     original_open = builtins.open
-    
-    def _safe_open(file, mode='r', buffering=-1, encoding=None, errors=None, newline=None, closefd=True, opener=None):
+
+    def _safe_open(file, mode='r', buffering=-1, encoding=None,
+                   errors=None, newline=None, closefd=True, opener=None):
         if not is_path_allowed(file, allowed_directories):
             raise PermissionError(
-                feedback.BLOCKED_PATH.format(path=file,
-                                             allowed=", ".join(allowed_directories))
+                feedback.BLOCKED_PATH.format(
+                    path=file,
+                    allowed=", ".join(allowed_directories))
             )
-        return original_open(file, mode, buffering, encoding, errors, newline, closefd, opener)
-    
+        return original_open(
+            file, mode, buffering, encoding, errors,
+            newline, closefd, opener)
+
     return _safe_open
+
 
 def run_cell():
     import json
-    
+
     # Read config from environment variable passed by the supervisor
     config_json = os.environ.get('SANDBOX_CONFIG_JSON', '{}')
     config = json.loads(config_json)
-    
+
     allowed_imports = config.get('authorized_imports', [])
     allowed_directories = config.get('allowed_directories', [])
-    
+
     # 1. Install Import Blocker
     blocker = SandboxImportBlocker(allowed_imports)
     sys.meta_path.insert(0, blocker)
-    
+
     # 2. Build Safe Builtins
     import builtins
     safe_builtins = {}
-    
-    b_dict = __builtins__ if isinstance(__builtins__, dict) else __builtins__.__dict__
+
+    b_dict = (__builtins__ if isinstance(__builtins__, dict)
+              else __builtins__.__dict__)
     dangerous = {"eval", "exec", "compile", "open", "input", "breakpoint"}
-    
+
     for k, v in b_dict.items():
         if k not in dangerous:
             safe_builtins[k] = v
@@ -106,12 +119,13 @@ def run_cell():
 
     # Inject secure open
     safe_builtins['open'] = secure_open(allowed_directories)
-    
+
     # 3. Read Code from Stdin
     code_to_run = sys.stdin.read()
 
     def final_answer(answer_string):
-        print(f"{feedback.FINAL_PREFIX}{answer_string}", file=sys.stdout, end="")
+        print(f"{feedback.FINAL_PREFIX}{answer_string}", file=sys.stdout,
+              end="")
         sys.exit(0)
 
     # 4. Build execution namespace
@@ -141,19 +155,20 @@ def run_cell():
                 buf += ch
 
         def _make_tool_wrapper(tool_name, req_fd, res_fd, param_names):
-            """Return a callable that proxies tool calls through the IPC pipe."""
+            """Return a callable that proxies tool calls through the pipe."""
             def wrapper(*args, **kwargs):
                 # positional args map onto the schema's parameter names
                 kwargs.update(zip(param_names, args))
-                msg = json.dumps({"name": tool_name, "arguments": kwargs}).encode() + b"\n"
+                msg = json.dumps(
+                    {"name": tool_name, "arguments": kwargs}
+                ).encode() + b"\n"
                 os.write(req_fd, msg)
                 raw = _pipe_readline(res_fd)
                 response = json.loads(raw)
                 if response.get("ok"):
                     return response["result"]
-                raise RuntimeError(
-                    f"Tool '{tool_name}' failed: {response.get('error', 'unknown error')}"
-                )
+                err = response.get("error", "unknown error")
+                raise RuntimeError(f"Tool '{tool_name}' failed: {err}")
             wrapper.__name__ = tool_name
             return wrapper
 
@@ -171,6 +186,6 @@ def run_cell():
     except Exception:
         raise  # Let the supervisor capture the traceback via stderr→stdout
 
+
 if __name__ == "__main__":
     run_cell()
-

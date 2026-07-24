@@ -1,31 +1,27 @@
-"""Alexandre - SWE-bench MCP tool server: repository inspection and editing tools."""
+"""MCP tool server exposing a repository to the SWE-bench agent.
+
+The tools let the agent read and search files, edit them in place, run
+shell commands and the evaluation suite, and read back the resulting
+patch. They serve two runtime modes, chosen by environment: a local
+testbed under exam, or a Docker container during a benchmark run.
+"""
 
 import base64
 import os
 import re
 import subprocess
-import sys
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("agent-smith-swebench")
 
-# ---------------------------------------------------------------------------
-# Runtime context
-# ---------------------------------------------------------------------------
-# Exam mode:        TESTBED_PATH=/path/to/local/testbed
-# Real SWE-bench:   SWEBENCH_CONTAINER=<docker-cid>
-#                   SWEBENCH_EVAL_SCRIPT=/path/to/eval.sh
-
+# Environment selects the mode: TESTBED_PATH for a local testbed under
+# exam, or SWEBENCH_CONTAINER (+ SWEBENCH_EVAL_SCRIPT) for a container.
 _CONTAINER: str = os.environ.get("SWEBENCH_CONTAINER", "")
 _EVAL_SCRIPT: str = os.environ.get("SWEBENCH_EVAL_SCRIPT", "")
 _TESTBED: str = os.environ.get("TESTBED_PATH", "/testbed")
 
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
 
 def _exec(cmd: str, workdir: str | None = None,
           stdin: str | None = None) -> tuple[int, str]:
@@ -101,10 +97,6 @@ def _write_raw(filepath: str, content: str) -> tuple[bool, str]:
         return False, str(exc)
 
 
-# ---------------------------------------------------------------------------
-# Tools
-# ---------------------------------------------------------------------------
-
 @mcp.tool()
 def read_file(filepath: str, start_line: int = 1, end_line: int = 0) -> str:
     """
@@ -126,11 +118,14 @@ def read_file(filepath: str, start_line: int = 1, end_line: int = 0) -> str:
     start = max(1, start_line) - 1
     end = end_line if end_line > 0 else len(lines)
     selected = lines[start:end]
-    return "\n".join(f"{i + start + 1}: {line}" for i, line in enumerate(selected))
+    return "\n".join(
+        f"{i + start + 1}: {line}" for i, line in enumerate(selected)
+    )
 
 
 @mcp.tool()
-def list_files(directory: str = "/testbed", pattern: str = "*.py") -> list[str]:
+def list_files(directory: str = "/testbed",
+               pattern: str = "*.py") -> list[str]:
     """
     List files in a directory matching a glob pattern.
 
@@ -267,7 +262,8 @@ def run_command(command: str, workdir: str = "/testbed") -> str:
     Returns:
         Combined stdout and stderr of the command.
     """
-    code, output = _exec(command, workdir=workdir if _CONTAINER else _resolve(workdir))
+    resolved = workdir if _CONTAINER else str(_resolve(workdir))
+    code, output = _exec(command, workdir=resolved)
     return output.strip() or "(no output)"
 
 
