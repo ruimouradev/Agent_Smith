@@ -51,6 +51,8 @@ Method:
 Rules:
 - Fix the cause, not the symptom. Do not touch unrelated code.
 - If a step fails, read the error before trying again.
+- These issues are small, usually a few lines. Once you have found
+  the cause, apply the fix instead of exploring further.
 """
 
 
@@ -75,9 +77,6 @@ class Profile:
     max_seconds: float
     request_timeout: float
     template: str
-    # sampling temperature for this benchmark; None keeps the endpoint
-    # default. A low value steadies the trajectory and its length.
-    temperature: float | None = None
 
     def system_prompt(self, manual: str) -> str:
         """Fill the template with the sandbox tool manual."""

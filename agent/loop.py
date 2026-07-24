@@ -63,8 +63,7 @@ def run(profile, sandbox: Sandbox, provider, budget,
             max_tokens = min(budget.remaining_output(),
                              profile.max_step_output_tokens)
             reply = provider.generate(_recent(messages, profile.max_turns),
-                                      profile.stop, max_tokens,
-                                      temperature=profile.temperature)
+                                      profile.stop, max_tokens)
             budget.spend(reply)
 
             code = extract(reply.text)
