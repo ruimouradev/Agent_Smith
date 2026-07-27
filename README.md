@@ -77,7 +77,6 @@ uv run python benchmarks/report.py --results-dir benchmarks/results
 
 ```bash
 uv run pytest
-uv run flake8
 uv run mypy
 ```
 
@@ -161,7 +160,7 @@ connection or a client of its own.
 - **SWE-bench** exposes repository tools (`read_file`, `list_files`,
   `search_code`, `search_function_or_class_definition_in_code`,
   `find_references`, `edit_file`, `run_command`, `run_tests`, `get_patch`) that
-  operate inside the task's Docker container (or a local testbed under exam).
+  operate inside the task's Docker container (or a local testbed checkout).
 
 ## Benchmark results and analysis
 

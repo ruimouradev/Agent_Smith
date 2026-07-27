@@ -2,7 +2,6 @@
 
 import json
 
-import httpx
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -17,6 +16,26 @@ MODELS_JSON = Path(__file__).resolve().parents[1] / "configs/models.json"
 def rate_limit_error() -> RateLimitError:
     """Build a RateLimitError without a real HTTP response behind it."""
     return RateLimitError.__new__(RateLimitError)
+
+
+def not_found_error() -> NotFoundError:
+    """Build a NotFoundError without a real HTTP response behind it.
+
+    The retry logic reads status_code, so the bare instance carries it.
+    """
+    exc = NotFoundError.__new__(NotFoundError)
+    exc.status_code = 404
+    return exc
+
+
+def server_error() -> InternalServerError:
+    """Build an InternalServerError without a real HTTP response behind it.
+
+    The retry logic reads status_code, so the bare instance carries it.
+    """
+    exc = InternalServerError.__new__(InternalServerError)
+    exc.status_code = 500
+    return exc
 
 
 def ok_response() -> SimpleNamespace:
@@ -220,8 +239,7 @@ def test_client_error_is_not_retried(monkeypatch):
 
     def always_404(**kwargs):
         calls.append(1)
-        raise NotFoundError("no such model", response=httpx.Response(
-            404, request=httpx.Request("POST", "http://u")), body=None)
+        raise not_found_error()
 
     monkeypatch.setattr(provider._client.chat.completions, "create",
                         always_404)
@@ -238,8 +256,7 @@ def test_server_error_is_retried(monkeypatch):
 
     def always_500(**kwargs):
         calls.append(1)
-        raise InternalServerError("boom", response=httpx.Response(
-            500, request=httpx.Request("POST", "http://u")), body=None)
+        raise server_error()
 
     monkeypatch.setattr(provider._client.chat.completions, "create",
                         always_500)

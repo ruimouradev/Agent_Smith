@@ -38,7 +38,7 @@ def test_docstrings_everywhere():
     documented; empty placeholder files are skipped."""
     files = (list((ROOT / "agent").glob("*.py"))
              + list((ROOT / "contract").glob("*.py"))
-             + [ROOT / "agent_mbpp.py", ROOT / "agent_swebench.py"])
+             + sorted(ROOT.glob("agent_*.py")))
     missing = []
     for file in files:
         source = file.read_text()
