@@ -153,7 +153,15 @@ def _recent(messages: list[dict], max_turns: int) -> list[dict]:
 
 
 def _truncate(text: str, limit: int) -> str:
-    """Cut an observation and tell the model it was cut."""
+    """Cut an observation and tell the model it was cut.
+
+    A long output keeps its head and its tail and drops the middle.
+    Test runs and shell commands put their verdict on the last lines,
+    so a head-only cut would hide the very result the model needs to
+    decide whether the fix worked.
+    """
     if len(text) <= limit:
         return text
-    return text[:limit] + feedback.TRUNCATED.format(chars=limit)
+    head = limit * 2 // 3
+    tail = limit - head
+    return text[:head] + feedback.TRUNCATED.format(chars=limit) + text[-tail:]

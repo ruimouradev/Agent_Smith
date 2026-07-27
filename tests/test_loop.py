@@ -38,7 +38,7 @@ class ScriptedProvider:
         self.calls: list[list[str]] = []
         self.caps: list[int] = []
 
-    def generate(self, messages, stop, max_tokens=None, temperature=None):
+    def generate(self, messages, stop, max_tokens=None):
         """Pop the next scripted reply and note what the model saw."""
         self.calls.append([m["content"] for m in messages])
         self.caps.append(max_tokens)
@@ -52,7 +52,7 @@ class ScriptedProvider:
 class CrashingProvider:
     """Raises on every call, like an API that is down."""
 
-    def generate(self, messages, stop, max_tokens=None, temperature=None):
+    def generate(self, messages, stop, max_tokens=None):
         """Always fail."""
         raise RuntimeError("api down")
 
@@ -68,9 +68,11 @@ def test_truncate_short_text_is_untouched():
 
 
 def test_truncate_cuts_and_warns():
-    """Over the limit: cut at it and tell the model it was cut."""
-    result = _truncate("x" * 700, 600)
-    assert result.startswith("x" * 600)
+    """Over the limit: keep head and tail, drop the middle, warn."""
+    text = "A" * 500 + "B" * 500 + "END"
+    result = _truncate(text, 600)
+    assert result.startswith("A" * 400)
+    assert result.endswith("END")
     assert "truncated" in result
 
 
@@ -130,7 +132,7 @@ def test_interrupt_is_recorded_and_still_propagates(mbpp_task, tmp_path):
     class InterruptingProvider:
         """Raises the exception a Ctrl+C delivers."""
 
-        def generate(self, messages, stop, max_tokens=None, temperature=None):
+        def generate(self, messages, stop, max_tokens=None):
             """Interrupt the run on the first call."""
             raise KeyboardInterrupt()
 

@@ -41,7 +41,8 @@ Observation. Never write the Observation yourself.
 {manual}
 
 Method:
-1. Read the issue and find the relevant code (search, read files).
+1. Read the issue and find the relevant code. Searching with a few
+   lines around each match shows the code in one step.
 2. Understand the cause before editing. Reproduce it if you can.
 3. Make the smallest fix that solves the issue.
 4. Run the tests that cover the change.
@@ -50,9 +51,12 @@ Method:
 
 Rules:
 - Fix the cause, not the symptom. Do not touch unrelated code.
+- A reproduction often calls several functions, but only the one
+  that raises is at fault. Fix that function and leave the others
+  unchanged, even when the failing example uses them.
+- Once run_tests shows the tests pass, submit. Editing on after a
+  passing run only risks breaking a working fix.
 - If a step fails, read the error before trying again.
-- These issues are small, usually a few lines. Once you have found
-  the cause, apply the fix instead of exploring further.
 """
 
 
