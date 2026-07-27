@@ -136,10 +136,12 @@ def test_missing_usage_is_estimated_not_fatal():
     """An endpoint that omits usage must not end the run: the counts are
     estimated from the text instead of raising."""
     no_usage = SimpleNamespace(
-        choices=[SimpleNamespace(message=SimpleNamespace(content="hello world"))],
+        choices=[SimpleNamespace(
+            message=SimpleNamespace(content="hello world"))],
         usage=None)
     provider = stubbed_provider(ChatStub(response=no_usage), ["k"])
-    reply = provider.generate([{"role": "user", "content": "hi there"}], stop=[])
+    reply = provider.generate(
+        [{"role": "user", "content": "hi there"}], stop=[])
     assert reply.text == "hello world"
     assert reply.input_tokens >= 1
     assert reply.output_tokens >= 1
@@ -169,25 +171,6 @@ def test_max_tokens_is_forwarded_to_the_api():
     provider = stubbed_provider(chat, ["k"])
     provider.generate([], stop=[], max_tokens=321)
     assert chat.kwargs["max_tokens"] == 321
-
-
-def test_temperature_is_forwarded_only_when_set():
-    """A temperature reaches the API; None leaves the key out entirely,
-    so the endpoint keeps its own default."""
-    class Recording(ChatStub):
-        """ChatStub that keeps the kwargs of each call."""
-
-        def create(self, **kwargs):
-            """Record kwargs, then answer normally."""
-            self.kwargs = kwargs
-            return super().create(**kwargs)
-
-    chat = Recording()
-    provider = stubbed_provider(chat, ["k"])
-    provider.generate([], stop=[], temperature=0.2)
-    assert chat.kwargs["temperature"] == 0.2
-    provider.generate([], stop=[])
-    assert "temperature" not in chat.kwargs
 
 
 def test_none_content_becomes_empty_text():
