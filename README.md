@@ -12,14 +12,14 @@ evaluated on two benchmarks: **MBPP** (short function-writing problems) and
 The goal of the project is to build an agent that solves programming tasks the
 way an engineer does: not by generating a single answer, but by reasoning,
 executing, and refining. Each turn the model produces one short thought and one
-Python code block; the code runs in a sandbox and its output comes back as the
+Python code block. The code runs in a sandbox and its output comes back as the
 next observation. The loop continues until the agent submits a final answer or
 exhausts its budget.
 
 Model-generated code is never trusted: it runs in an isolated child process
 with an import allowlist, disabled dangerous builtins, a path-checked `open`,
 and hard limits on time and memory. The agent reaches the outside world only
-through a small set of tools exposed over the Model Context Protocol (MCP) — for
+through a small set of tools exposed over the Model Context Protocol (MCP): for
 MBPP a single `run_tests`, for SWE-bench a handful of repository inspection and
 editing tools that operate inside the task's Docker container.
 
@@ -35,8 +35,8 @@ uv sync
 ```
 
 **API keys** are read from the environment. Create a `.env` file at the repository
-root (it is git-ignored). Keys may be comma-separated; the agent rotates through
-them when a provider rate-limits:
+root by copying `.env.example` (`.env` itself is git-ignored). Keys may be
+comma-separated. The agent rotates through them when a provider rate-limits:
 
 ```
 MISTRAL_API_KEY=key1,key2
@@ -86,24 +86,24 @@ uv run mypy
 The project is split so that the agent, the sandbox, and the tools depend only
 on a shared contract, never on each other's internals.
 
-- **`contract/`** — the shared vocabulary: the data models (`SandboxConfig`, the
-  per-step trace, the `solution.json` schema), the `Sandbox` protocol the loop
-  programs against, and the fixed feedback strings.
-- **`agent/`** — the reasoning side. `loop.py` runs the Thought→Code→Observation
-  cycle; `profiles.py` holds everything benchmark-specific (prompt, limits,
-  formats); `providers.py` talks to the LLM endpoint with key rotation and
-  retries; `budget.py` tracks the token/time budget; `extract.py` pulls the code
-  block out of a reply; `docker_bridge.py` starts and tears down the SWE-bench
+- **`contract/`**: the shared vocabulary. It holds the data models
+  (`SandboxConfig`, the per-step trace, the `solution.json` schema), the
+  `Sandbox` protocol the loop programs against, and the fixed feedback strings.
+- **`agent/`**: the reasoning side. `loop.py` runs the Thought→Code→Observation
+  cycle. `profiles.py` holds everything benchmark-specific (prompt, limits,
+  formats). `providers.py` talks to the LLM endpoint with key rotation and
+  retries. `budget.py` tracks the token/time budget. `extract.py` pulls the code
+  block out of a reply. `docker_bridge.py` starts and tears down the SWE-bench
   evaluation container.
-- **`sandbox/`** — the execution side. `cli.py` is the entry point,
+- **`sandbox/`**: the execution side. `cli.py` is the entry point,
   `supervisor.py` (`LocalSandbox`) spawns and watches the cell, and `cell.py` is
   the locked-down child process where model code actually runs. `mcp_client.py`
   connects to a tool server.
-- **`mcp_tools_mbpp.py` / `mcp_tools_swebench.py`** — the MCP tool servers.
-- **`agent_mbpp.py` / `agent_swebench.py`** — the two benchmark entry points that
+- **`mcp_tools_mbpp.py` / `mcp_tools_swebench.py`**: the MCP tool servers.
+- **`agent_mbpp.py` / `agent_swebench.py`**: the two benchmark entry points that
   build the profile, wire up the sandbox and tools, and hand control to the loop.
-- **`benchmarks/`** — `run.py` drives the full task×model grid through the real
-  entry points; `report.py` turns the resulting `solution.json` files into the
+- **`benchmarks/`**: `run.py` drives the full task×model grid through the real
+  entry points. `report.py` turns the resulting `solution.json` files into the
   report tables.
 
 ## Agent loop explanation
@@ -115,7 +115,7 @@ One task is one call to `agent/loop.py`. Each iteration:
    spend the whole budget.
 2. The reply is parsed: exactly one thought and one ```python block. If no block
    is found the agent is told so and the turn is retried.
-3. The code runs in the sandbox; its printed output becomes the next
+3. The code runs in the sandbox and its printed output becomes the next
    observation. `final_answer(...)` ends the task.
 4. The budget is charged the reply's real token cost, taken from the provider's
    usage counts. The loop stops on a submitted answer, or when iterations,
@@ -135,9 +135,9 @@ kill, or a runaway loop takes down only the cell, never the agent.
 
 Inside the cell, before any model code runs:
 
-- a `sys.meta_path` finder blocks every import that is not on the allowlist;
+- a `sys.meta_path` finder blocks every import that is not on the allowlist.
 - the dangerous builtins (`eval`, `exec`, `compile`, `open`, `input`,
-  `breakpoint`) are replaced with stubs that raise, and `__import__` is guarded;
+  `breakpoint`) are replaced with stubs that raise, and `__import__` is guarded.
 - `open` is swapped for a version that resolves the real path and refuses
   anything outside the allowed directories, which stops path-traversal escapes.
 
@@ -152,41 +152,45 @@ stdio. At startup the supervisor asks the server for its tool schemas, turns
 them into a text manual for the system prompt, and injects a wrapper for each
 tool into the cell's namespace. When model code calls a tool, the wrapper sends
 a JSON request over a pipe to the supervisor, which forwards it to the MCP
-server and writes the result back — so the untrusted cell never holds a network
+server and writes the result back, so the untrusted cell never holds a network
 connection or a client of its own.
 
 - **MBPP** exposes one tool, `run_tests`, which runs the candidate function and
   the task assertions in a fresh process and reports, as JSON, whether they all
   passed.
-- **SWE-bench** exposes repository tools — `read_file`, `list_files`,
+- **SWE-bench** exposes repository tools (`read_file`, `list_files`,
   `search_code`, `search_function_or_class_definition_in_code`,
-  `find_references`, `edit_file`, `run_command`, `run_tests`, `get_patch` — that
+  `find_references`, `edit_file`, `run_command`, `run_tests`, `get_patch`) that
   operate inside the task's Docker container (or a local testbed under exam).
 
 ## Benchmark results and analysis
 
 The full comparison lives in [`BENCHMARK_REPORT.md`](BENCHMARK_REPORT.md): the
-same agent driven by **24 different models across four providers** on eight
-SWE-bench Verified issues, with every model × task result (pass, iterations,
-tokens, time), provider reliability, the intermediary efficiency metrics, and
-the ablations behind the final agent configuration. Charts are in
-[`benchmarks/figures/`](benchmarks/figures/).
+same agent driven by **18 models across four providers** on eight SWE-bench
+Verified issues (twelve completed the full suite), with every model × task
+result (pass, iterations, tokens, time), provider reliability, the
+intermediary efficiency metrics, and the ablations behind the final agent
+configuration. Charts are in [`benchmarks/figures/`](benchmarks/figures/).
 
-Headline findings: 18 models completed the full suite and `mistral-large-latest`
-wins on every axis — the only model to pass **8/8**, and it does so with the
-fewest input tokens and the fewest iterations. Small models hold up well
-(`ministral-8b` also reaches 8/8), iteration count is a leading indicator of
-failure, and provider reliability (rate-limit retries, deprecated model IDs,
-per-minute ceilings) turns out to matter as much as raw model quality.
+Headline findings: `mistral-large-latest` wins on every axis that matters.
+It scores **7/8**, reproduced task for task by a second full pass, with the
+fewest iterations and the least input context among the leaders, and its only
+miss is a task none of the twelve models solved. The best free model
+(`gemini-flash-lite`) matches the pass count but needs several API keys to
+survive one suite. Iteration count is a leading indicator of failure, the
+agent piece that moved accuracy most was a verification gate rather than any
+prompt tweak, and a third of the fleet was stopped by provider ceilings or
+protocol mismatches before the model could think, so the report treats the
+provider layer as part of the system under test.
 
 ## Resources
 
-- SWE-bench — Jimenez et al., *SWE-bench: Can Language Models Resolve Real-World
+- SWE-bench: Jimenez et al., *SWE-bench: Can Language Models Resolve Real-World
   GitHub Issues?* (2023).
-- MBPP — Austin et al., *Program Synthesis with Large Language Models* (2021).
-- ReAct — Yao et al., *ReAct: Synergizing Reasoning and Acting in Language
-  Models* (2022) — the reason/act loop this agent follows.
-- Model Context Protocol — <https://modelcontextprotocol.io>.
+- MBPP: Austin et al., *Program Synthesis with Large Language Models* (2021).
+- ReAct: Yao et al., *ReAct: Synergizing Reasoning and Acting in Language
+  Models* (2022), the reason/act loop this agent follows.
+- Model Context Protocol: <https://modelcontextprotocol.io>.
 - Provider APIs (OpenAI-compatible): Mistral, Groq, Google Gemini, OpenRouter.
 - Tooling: [uv](https://docs.astral.sh/uv/), pytest, flake8, mypy.
 

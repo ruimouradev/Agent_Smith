@@ -7,6 +7,7 @@ testbed under exam, or a Docker container during a benchmark run.
 """
 
 import base64
+import difflib
 import os
 import re
 import subprocess
@@ -21,6 +22,10 @@ mcp = FastMCP("agent-smith-swebench")
 _CONTAINER: str = os.environ.get("SWEBENCH_CONTAINER", "")
 _EVAL_SCRIPT: str = os.environ.get("SWEBENCH_EVAL_SCRIPT", "")
 _TESTBED: str = os.environ.get("TESTBED_PATH", "/testbed")
+
+# An edit invalidates the previous test run. get_patch refuses to hand
+# out an untested diff, so a submission always follows a test.
+_edited_since_test = False
 
 
 def _exec(cmd: str, workdir: str | None = None,
@@ -58,9 +63,22 @@ def _exec(cmd: str, workdir: str | None = None,
 
 
 def _resolve(filepath: str) -> Path:
-    """Resolve a path relative to the testbed when not absolute."""
+    """
+    Resolve a path against the testbed.
+
+    A relative path is taken from the testbed root. Outside a container
+    the container's /testbed prefix is remapped onto the local testbed
+    directory, so a caller can use the same /testbed paths in both modes.
+    """
     p = Path(filepath)
-    return p if p.is_absolute() else Path(_TESTBED) / p
+    if not p.is_absolute():
+        return Path(_TESTBED) / p
+    if not _CONTAINER and _TESTBED != "/testbed":
+        try:
+            return Path(_TESTBED) / p.relative_to("/testbed")
+        except ValueError:
+            pass
+    return p
 
 
 def _read_raw(filepath: str) -> tuple[bool, str]:
@@ -159,22 +177,34 @@ def list_files(directory: str = "/testbed",
 
 
 @mcp.tool()
-def search_code(pattern: str, file_pattern: str = "*.py") -> str:
+def search_code(pattern: str, file_pattern: str = "*.py",
+                around: int = 0) -> str:
     """
     Search for a text pattern across repository files (like grep -rn).
 
     Args:
         pattern: The text (or regex) to search for.
         file_pattern: Glob to restrict which files to search (default *.py).
+        around: How many lines on each side of a match to include, the
+            way "grep -C" does (default 0, matching lines only). A few
+            lines let one call both locate the code and read its body.
 
     Returns:
-        Matching lines formatted as "filepath:lineno: content".
+        Matching lines formatted as "filepath:lineno: content". Lines
+        shown around a match carry a "-" separator instead of ":".
     """
     base = "/testbed" if _CONTAINER else "."
+    ctx = f"-C {around} " if around > 0 else ""
     code, output = _exec(
-        f"grep -rn --include='{file_pattern}' '{pattern}' {base}",
+        f"grep -rn {ctx}--include='{file_pattern}' '{pattern}' {base}",
         workdir=None if _CONTAINER else _TESTBED,
     )
+    if not output.strip() and "/" in file_pattern:
+        # a path in file_pattern never matches: the filter only sees
+        # file names, and telling the model saves it blind retries
+        return ("No matches found. file_pattern filters by file name "
+                "only, not by path. Use a plain name like 'vector.py' "
+                "or '*.py'.")
     return output.strip() or "No matches found."
 
 
@@ -213,9 +243,9 @@ def find_references(name: str, filepath: str = "", line: int = 0) -> str:
     """
     if filepath:
         if _CONTAINER:
-            code, output = _exec(f"grep -n '{name}' {filepath}")
+            code, output = _exec(f"grep -Hn '{name}' {filepath}")
         else:
-            code, output = _exec(f"grep -n '{name}' {_resolve(filepath)}")
+            code, output = _exec(f"grep -Hn '{name}' {_resolve(filepath)}")
     else:
         base = "/testbed" if _CONTAINER else "."
         code, output = _exec(
@@ -223,6 +253,32 @@ def find_references(name: str, filepath: str = "", line: int = 0) -> str:
             workdir=None if _CONTAINER else _TESTBED,
         )
     return output.strip() or f"No references to '{name}' found."
+
+
+def _nearest_region(content: str, old_str: str) -> str:
+    """
+    Find the file region that most resembles a failed old_str.
+
+    A mismatch usually means the string was retyped from memory with
+    the wrong whitespace. Showing the real text around the intended
+    spot lets the next attempt copy it exactly instead of guessing.
+    """
+    probe = next(
+        (ln.strip() for ln in old_str.splitlines() if ln.strip()), "")
+    if not probe:
+        return ""
+    lines = content.splitlines()
+    idx = next((i for i, ln in enumerate(lines) if probe in ln), -1)
+    if idx < 0:
+        close = difflib.get_close_matches(
+            probe, [ln.strip() for ln in lines], n=1, cutoff=0.6)
+        if not close:
+            return ""
+        idx = next(
+            i for i, ln in enumerate(lines) if ln.strip() == close[0])
+    lo, hi = max(0, idx - 3), min(len(lines), idx + 4)
+    header = f"The file around lines {lo + 1}-{hi} reads:\n"
+    return header + "\n".join(lines[lo:hi])
 
 
 @mcp.tool()
@@ -242,11 +298,16 @@ def edit_file(filepath: str, old_str: str, new_str: str) -> str:
     if not ok:
         return f"Error reading file: {content}"
     if old_str not in content:
-        return f"String not found in {filepath}."
+        msg = (f"String not found in {filepath}. old_str must match "
+               f"the file exactly, whitespace included.")
+        region = _nearest_region(content, old_str)
+        return f"{msg}\n{region}" if region else msg
     new_content = content.replace(old_str, new_str, 1)
     ok, err = _write_raw(filepath, new_content)
     if not ok:
         return f"Error writing file: {err}"
+    global _edited_since_test
+    _edited_since_test = True
     return f"OK: replaced in {filepath}."
 
 
@@ -275,6 +336,8 @@ def run_tests() -> str:
     Returns:
         Combined stdout and stderr of the eval script.
     """
+    global _edited_since_test
+    _edited_since_test = False
     if not _EVAL_SCRIPT:
         return "No eval script configured (SWEBENCH_EVAL_SCRIPT not set)."
     if _CONTAINER:
@@ -304,6 +367,10 @@ def get_patch() -> str:
     Returns:
         The unified git diff, or a message if there are no changes.
     """
+    if _edited_since_test:
+        raise RuntimeError(
+            "the repository changed after the last run_tests. Run the "
+            "tests first and read their result, then collect the patch.")
     workdir = "/testbed" if _CONTAINER else None
     code, output = _exec("git diff", workdir=workdir or _TESTBED)
     return output.strip() or "No changes (empty diff)."
