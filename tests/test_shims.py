@@ -8,6 +8,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+from contract import BENCHMARK_MBPP, BENCHMARK_SWEBENCH
+
+# the entry points are named after the benchmark they serve
+MBPP_SHIM = f"agent_{BENCHMARK_MBPP}"
+SWE_SHIM = f"agent_{BENCHMARK_SWEBENCH}"
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -40,7 +46,7 @@ def test_mbpp_without_keys_exits_zero_with_clear_error(tmp_path):
         "test_imports": [], "test_list": [],
     }))
     output = tmp_path / "solution.json"
-    result = run_shim("agent_mbpp", task, output, clean_env())
+    result = run_shim(MBPP_SHIM, task, output, clean_env())
     written = json.loads(output.read_text())
     assert result.returncode == 0
     assert "no API keys" in written["error"]
@@ -53,7 +59,7 @@ def test_mbpp_with_broken_task_file_exits_zero(tmp_path):
     task = tmp_path / "bad.json"
     task.write_text("{broken")
     output = tmp_path / "solution.json"
-    result = run_shim("agent_mbpp", task, output, clean_env())
+    result = run_shim(MBPP_SHIM, task, output, clean_env())
     written = json.loads(output.read_text())
     assert result.returncode == 0
     assert written["task_id"] == "unknown"
@@ -69,7 +75,7 @@ def test_swe_writes_a_failure_when_the_container_cannot_start(tmp_path):
         "docker_image": "localhost/no-such-image:none", "eval_script": "s",
     }))
     output = tmp_path / "solution.json"
-    result = run_shim("agent_swebench", task, output,
+    result = run_shim(SWE_SHIM, task, output,
                       clean_env(OPENROUTER_API_KEY="fake"))
     written = json.loads(output.read_text())
     assert result.returncode == 0

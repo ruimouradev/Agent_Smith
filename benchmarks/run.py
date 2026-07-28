@@ -23,6 +23,8 @@ import sys
 import time
 from pathlib import Path
 
+from contract import BENCHMARK_MBPP, BENCHMARK_SWEBENCH
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -73,7 +75,7 @@ def main() -> None:
     """Run the full grid and write the evidence files."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--benchmark", required=True,
-                        choices=["mbpp", "swebench"])
+                        choices=[BENCHMARK_MBPP, BENCHMARK_SWEBENCH])
     parser.add_argument("--tasks-dir", required=True,
                         help="directory with the task .json files")
     parser.add_argument("--models", default="",

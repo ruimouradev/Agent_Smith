@@ -32,6 +32,7 @@ class ScriptedProvider:
     def __init__(self, texts: list[str],
                  input_costs: list[int] | None = None,
                  output_costs: list[int] | None = None):
+        """Load the script of replies and their token costs."""
         self.texts = list(texts)
         self.input_costs = list(input_costs or [])
         self.output_costs = list(output_costs or [])

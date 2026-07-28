@@ -13,9 +13,10 @@ import argparse
 import json
 from pathlib import Path
 
-import matplotlib  # type: ignore
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # type: ignore  # noqa: E402
+import matplotlib.pyplot as plt
+
+# headless backend: the figures are written to files, never shown
+plt.switch_backend("Agg")
 
 
 def load(results_dir):

@@ -50,6 +50,7 @@ class ChatStub:
     """Chat endpoint stub: rate-limits the first n calls, then replies."""
 
     def __init__(self, fail_first: int = 0, response=None):
+        """Set how many calls fail before the stub answers."""
         self.fail_first = fail_first
         self.response = ok_response() if response is None else response
         self.calls = 0
@@ -238,6 +239,7 @@ def test_client_error_is_not_retried(monkeypatch):
     calls = []
 
     def always_404(**kwargs):
+        """Answer every call with a client error."""
         calls.append(1)
         raise not_found_error()
 
@@ -255,6 +257,7 @@ def test_server_error_is_retried(monkeypatch):
     calls = []
 
     def always_500(**kwargs):
+        """Answer every call with a server error."""
         calls.append(1)
         raise server_error()
 

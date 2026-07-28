@@ -10,6 +10,7 @@ class FakeClient:
     """Records the calls it receives and answers a fixed verdict."""
 
     def __init__(self, success: bool = True):
+        """Choose the verdict every call will get."""
         self.success = success
         self.calls: list[tuple[str, dict]] = []
 
@@ -25,6 +26,7 @@ class FakeSandbox:
     manual = "MANUAL"
 
     def __init__(self, observation: str):
+        """Fix the observation every run will return."""
         self.observation = observation
 
     def run(self, code: str) -> str:

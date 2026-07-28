@@ -5,6 +5,8 @@ agent/ and sandbox/ import from here and not from each other.
 """
 
 from contract.models import (
+    BENCHMARK_MBPP,
+    BENCHMARK_SWEBENCH,
     MBPPTaskInput,
     SandboxConfig,
     SolutionOutput,
@@ -13,6 +15,8 @@ from contract.models import (
 )
 
 __all__ = [
+    "BENCHMARK_MBPP",
+    "BENCHMARK_SWEBENCH",
     "MBPPTaskInput",
     "SandboxConfig",
     "SolutionOutput",
