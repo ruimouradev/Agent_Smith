@@ -115,6 +115,34 @@ def test_reply_without_code_gets_no_code_feedback(mbpp_task, tmp_path):
     assert out.success
 
 
+class KeywordCallSandbox:
+    """Raise the keyword TypeError once, then behave like the fake."""
+
+    manual = "MANUAL"
+
+    def run(self, code: str) -> str:
+        """Mimic a final_answer(code=...) call hitting the real cell."""
+        if "final_answer(code=" in code:
+            return ("Traceback (most recent call last):\n  ...\n"
+                    "TypeError: final_answer() got an unexpected "
+                    "keyword argument 'code'")
+        return feedback.FINAL_PREFIX + "SOLUTION"
+
+
+def test_keyword_final_answer_gets_the_calling_form(mbpp_task, tmp_path):
+    """The TypeError comes back with the hint, the run recovers."""
+    profile = mbpp_profile(mbpp_task)
+    provider = ScriptedProvider([
+        "```python\nfinal_answer(code='x')\n```",
+        "```python\nfinal_answer('x')\n```",
+    ])
+    out = run(profile, KeywordCallSandbox(), provider, budget(),
+              tmp_path / "solution.json")
+    assert out.steps[0].sandbox_output.endswith(
+        feedback.FINAL_ANSWER_KEYWORD)
+    assert out.success
+
+
 def test_provider_crash_still_writes_solution(mbpp_task, tmp_path):
     """An exception becomes an error solution.json, never a crash."""
     profile = mbpp_profile(mbpp_task)

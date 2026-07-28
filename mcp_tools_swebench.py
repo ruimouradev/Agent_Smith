@@ -3,7 +3,7 @@
 The tools let the agent read and search files, edit them in place, run
 shell commands and the evaluation suite, and read back the resulting
 patch. They serve two runtime modes, chosen by environment: a local
-testbed under exam, or a Docker container during a benchmark run.
+testbed checkout, or a Docker container during a benchmark run.
 """
 
 import base64
@@ -17,8 +17,8 @@ from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("agent-smith-swebench")
 
-# Environment selects the mode: TESTBED_PATH for a local testbed under
-# exam, or SWEBENCH_CONTAINER (+ SWEBENCH_EVAL_SCRIPT) for a container.
+# Environment selects the mode: TESTBED_PATH for a local checkout, or
+# SWEBENCH_CONTAINER (+ SWEBENCH_EVAL_SCRIPT) for a container.
 _CONTAINER: str = os.environ.get("SWEBENCH_CONTAINER", "")
 _EVAL_SCRIPT: str = os.environ.get("SWEBENCH_EVAL_SCRIPT", "")
 _TESTBED: str = os.environ.get("TESTBED_PATH", "/testbed")

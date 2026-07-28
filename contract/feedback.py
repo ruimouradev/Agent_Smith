@@ -22,6 +22,10 @@ MALFORMED_BLOCK = (
     "[Your code block was never closed, so it was read to the end of "
     "the reply and run anyway. Close it with ``` next time.]\n"
 )
+FINAL_ANSWER_KEYWORD = (
+    "final_answer takes one positional argument. "
+    "Call final_answer(value) with no keyword."
+)
 # placed in the history instead of an empty model reply: providers
 # reject an assistant message with no content
 EMPTY_REPLY = "(no output)"

@@ -77,6 +77,10 @@ def run(profile, sandbox: Sandbox, provider, budget,
             # note so the model knows its code may have been cut
             if code and not final and was_recovered(reply.text):
                 observation = feedback.MALFORMED_BLOCK + observation
+            # a final_answer called with a keyword raises instead of
+            # ending the run, and the note gives the calling form
+            if "final_answer() got an unexpected keyword" in observation:
+                observation += "\n" + feedback.FINAL_ANSWER_KEYWORD
             steps.append(StepMetrics(
                 step=len(steps) + 1,
                 input_tokens=reply.input_tokens,
