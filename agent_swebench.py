@@ -18,8 +18,8 @@ from agent.budget import Budget
 from agent.loop import run
 from agent.profiles import swe_profile
 from agent.providers import from_config
-from contract import (SandboxConfig, SolutionOutput, SWEBenchTaskInput,
-                      feedback)
+from contract import (BENCHMARK_SWEBENCH, SandboxConfig, SolutionOutput,
+                      SWEBenchTaskInput, feedback)
 from contract.protocols import Sandbox
 
 # anchored to this file, so the entry point works from any cwd
@@ -208,7 +208,7 @@ def _make_sandbox(client) -> Sandbox:
 def _write_failure(output: str, task_id: str, error: str) -> None:
     """Write a valid solution.json for a run that never started."""
     result = SolutionOutput.from_steps(
-        task_id=task_id, benchmark="swebench", success=False,
+        task_id=task_id, benchmark=BENCHMARK_SWEBENCH, success=False,
         solution="", steps=[], total_time_seconds=0.0, error=error,
     )
     Path(output).write_text(result.model_dump_json(indent=2))

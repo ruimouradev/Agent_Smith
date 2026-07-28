@@ -9,7 +9,8 @@ one can afford method.
 
 from dataclasses import dataclass
 
-from contract import MBPPTaskInput, SWEBenchTaskInput
+from contract import (BENCHMARK_MBPP, BENCHMARK_SWEBENCH, MBPPTaskInput,
+                      SWEBenchTaskInput)
 
 _MBPP_TEMPLATE = """You are a Python coding agent. Solve the task in \
 as few steps as possible.
@@ -105,7 +106,7 @@ def mbpp_profile(task: MBPPTaskInput) -> Profile:
     )
     return Profile(
         task_id=str(task.task_id),
-        benchmark="mbpp",
+        benchmark=BENCHMARK_MBPP,
         user_prompt=user_prompt,
         stop=["Observation:", "<end_code>"],
         max_obs_chars=600,
@@ -137,7 +138,7 @@ def swe_profile(task: SWEBenchTaskInput) -> Profile:
     )
     return Profile(
         task_id=task.instance_id,
-        benchmark="swebench",
+        benchmark=BENCHMARK_SWEBENCH,
         user_prompt=user_prompt,
         stop=["Observation:", "<end_code>"],
         max_obs_chars=3_000,

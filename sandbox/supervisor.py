@@ -12,7 +12,8 @@ import select
 import subprocess
 import sys
 import time
-from typing import IO
+import io
+from typing import IO, cast
 
 from contract import feedback
 from contract.models import SandboxConfig
@@ -128,14 +129,16 @@ class LocalSandbox:
 
                 for fd in readable:
                     if fd is stdout_pipe:
-                        chunk = fd.read1(4096)  # type: ignore[attr-defined]
+                        # the pipes are buffered readers, and read1
+                        # takes what is ready instead of blocking
+                        chunk = cast(io.BufferedReader, fd).read1(4096)
                         if chunk:
                             stdout_chunks.append(chunk)
                         else:
                             # stdout closed → cell has exited
                             watch_fds.remove(stdout_pipe)
                     elif use_mcp and fd is req_r_file:
-                        chunk = fd.read1(4096)  # type: ignore[attr-defined]
+                        chunk = cast(io.BufferedReader, fd).read1(4096)
                         req_buf += chunk
                         # Messages are newline-delimited JSON
                         while _MSG_SEP in req_buf:

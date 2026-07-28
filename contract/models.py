@@ -7,6 +7,11 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+# The benchmark identifiers the moulinette validates. Defined once
+# here so every layer names them the same way.
+BENCHMARK_MBPP = "mbpp"
+BENCHMARK_SWEBENCH = "swebench"
+
 
 class SandboxConfig(BaseModel):
     """Limits and permissions for the execution sandbox.
