@@ -22,7 +22,7 @@ class MCPClient:
 
     Runs the async event loop in a background daemon thread so the supervisor
     can call list_tools() and call_tool() synchronously without blocking the
-    main process — and without restarting a new event loop for each call.
+    main process, and without restarting a new event loop for each call.
 
     Usage:
         with MCPClient() as client:

@@ -135,7 +135,7 @@ class LocalSandbox:
                         if chunk:
                             stdout_chunks.append(chunk)
                         else:
-                            # stdout closed → cell has exited
+                            # stdout closed means the cell has exited
                             watch_fds.remove(stdout_pipe)
                     elif use_mcp and fd is req_r_file:
                         chunk = cast(io.BufferedReader, fd).read1(4096)
@@ -187,7 +187,7 @@ class LocalSandbox:
         stdout = b"".join(stdout_chunks).decode(errors="replace")
         exit_code = proc.returncode
 
-        # Memory limit hit → SIGKILL (-9) or MemoryError in output
+        # Memory limit hit gives SIGKILL (-9) or MemoryError in output
         if exit_code in (-9, -11) or "MemoryError" in stdout:
             mem_msg = feedback.MEMORY.format(mb=self.config.max_memory_mb)
             return f"{stdout}\n{mem_msg}" if stdout else mem_msg

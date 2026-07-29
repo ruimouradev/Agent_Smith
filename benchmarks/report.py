@@ -65,7 +65,7 @@ def reliability_table(runs: list[dict]) -> str:
         rows = [r["solution"] for r in runs if r["model"] == model]
         steps = [s for r in rows for s in r["steps"]]
         if not steps:
-            lines.append(f"| `{model}` | — | 0 | 0 | — | 0/{len(rows)} |")
+            lines.append(f"| `{model}` | n/a | 0 | 0 | n/a | 0/{len(rows)} |")
             continue
         requests = sum(1 + s["retries"] for s in steps)
         retries = sum(s["retries"] for s in steps)
@@ -131,8 +131,8 @@ def intermediary_table(runs: list[dict]) -> str:
         gap = test_gap(run)
         lines.append(
             f"| `{run['model']}` | {run['task']} "
-            f"| {touch if touch else '—'} "
-            f"| {f'{gap:.1f}' if gap else '—'} |")
+            f"| {touch if touch else 'n/a'} "
+            f"| {f'{gap:.1f}' if gap else 'n/a'} |")
     return "\n".join(lines)
 
 

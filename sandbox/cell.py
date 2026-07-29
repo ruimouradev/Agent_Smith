@@ -184,7 +184,7 @@ def run_cell():
     except (KeyboardInterrupt, SystemExit):
         raise  # Must propagate flow control exceptions
     except Exception:
-        raise  # Let the supervisor capture the traceback via stderr→stdout
+        raise  # Let the supervisor capture the traceback via stderr to stdout
 
 
 if __name__ == "__main__":
