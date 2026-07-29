@@ -7,8 +7,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
-# The benchmark identifiers the moulinette validates. Defined once
-# here so every layer names them the same way.
+# The benchmark identifiers, defined once so every layer names
+# them the same way.
 BENCHMARK_MBPP = "mbpp"
 BENCHMARK_SWEBENCH = "swebench"
 

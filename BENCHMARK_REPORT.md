@@ -237,6 +237,7 @@ rejected one looked good in a small sample and degraded a larger one.
 | Head+tail observation truncation | test verdicts hidden by head-only cuts |
 | Verification gate on `get_patch` | patches submitted without running tests |
 | "Submit once tests pass" rule | 5 to 7 wasted iterations after a green run |
+| Explicit verdict line in `run_tests` output | post-green distrust: the raw runner output buries the result in shell noise, so the model re-verified through side channels |
 
 **Rejected** (a sample of the levers that did not survive):
 
@@ -246,15 +247,21 @@ rejected one looked good in a small sample and degraded a larger one.
 | Batched-reconnaissance prompt | slower and messier edits | not pursued |
 | Definition search with context | edits sent to the wrong file | not pursued |
 | Early-submit prompt variants (×3) | faster | fast wrong submissions |
+| Prescriptive post-green rules | fewer post-green steps | the model packed many actions into single blocks and submitted without reading its own test results |
 
-The systematic lesson, confirmed across nine rejected variants:
+The systematic lesson, confirmed across ten rejected variants:
 **reactive information helps and behavioural prescriptions backfire.**
 Telling the model a fact at the moment it errs (the real file region,
-the glob that cannot match) sticks. Telling it how to behave (submit
-faster, batch lookups) trades reliability for speed. The shipped
-configuration passed a 10-round stability seal of 57/60 task-runs with
-no round losing more than one task, before this report's collection
-was run with it.
+the glob that cannot match, the explicit test verdict) sticks. Telling
+it how to behave (submit faster, batch lookups) trades reliability for
+speed. The verdict line against the prescriptive rules is the cleanest
+pairing: the same goal, and only the informative form survived, cutting
+the mean gap between the last green test run and submission to 1.1
+steps.
+
+The shipped configuration passed a 10-round stability seal of 57/60
+task-runs, and the final configuration sealed at 30/30 task-runs over
+five consecutive sweeps of the regression pool.
 
 ## 9. Cost
 

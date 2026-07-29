@@ -29,7 +29,7 @@ _edited_since_test = False
 
 
 def _exec(cmd: str, workdir: str | None = None,
-          stdin: str | None = None) -> tuple[int, str]:
+          stdin: str | None = None, timeout: int = 60) -> tuple[int, str]:
     """
     Run a shell command in the testbed context.
 
@@ -47,13 +47,13 @@ def _exec(cmd: str, workdir: str | None = None,
             docker_cmd += [_CONTAINER, "bash", "-c", cmd]
             r = subprocess.run(
                 docker_cmd, input=stdin,
-                capture_output=True, text=True, timeout=60,
+                capture_output=True, text=True, timeout=timeout,
             )
         else:
             cwd = workdir or _TESTBED
             r = subprocess.run(
                 cmd, shell=True, cwd=cwd, input=stdin,
-                capture_output=True, text=True, timeout=60,
+                capture_output=True, text=True, timeout=timeout,
             )
         return r.returncode, r.stdout + r.stderr
     except subprocess.TimeoutExpired:
@@ -328,6 +328,22 @@ def run_command(command: str, workdir: str = "/testbed") -> str:
     return output.strip() or "(no output)"
 
 
+_FAIL_MARKS = ("FAILED", " failed", "exceptions", "DO *NOT* COMMIT")
+
+
+def _test_verdict(output: str) -> str:
+    """The verdict line for a test run, or nothing when the format
+    is unknown. Failure marks win over pass marks."""
+    if any(mark in output for mark in _FAIL_MARKS):
+        return ("\n[run_tests] Tests failed. Fix the code and call "
+                "run_tests() again.")
+    pytest_pass = re.search(r"\d+ passed", output)
+    django_pass = re.search(r"Ran \d+ tests?", output) and "\nOK" in output
+    if pytest_pass or django_pass:
+        return "\n[run_tests] All tests passed."
+    return ""
+
+
 @mcp.tool()
 def run_tests() -> str:
     """
@@ -343,7 +359,7 @@ def run_tests() -> str:
     if _CONTAINER:
         # 2>&1 keeps stdout and stderr in emission order, so the summary
         # reads in sequence instead of after a separate stderr block
-        code, output = _exec(f"bash {_EVAL_SCRIPT} 2>&1")
+        code, output = _exec(f"bash {_EVAL_SCRIPT} 2>&1", timeout=300)
     else:
         try:
             r = subprocess.run(
@@ -356,7 +372,10 @@ def run_tests() -> str:
             output = "Eval script timed out (>300s)."
         except Exception as exc:
             output = str(exc)
-    return output.strip() or "(no output)"
+    # lines starting with + are shell trace, not test results
+    output = "\n".join(line for line in output.splitlines()
+                       if not line.startswith("+ "))
+    return (output.strip() or "(no output)") + _test_verdict(output)
 
 
 @mcp.tool()
