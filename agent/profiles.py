@@ -52,6 +52,8 @@ Method:
 
 Rules:
 - Fix the cause, not the symptom. Do not touch unrelated code.
+- The issue defines the scope. Cover what it describes and nothing
+  more.
 - A reproduction often calls several functions, but only the one
   that raises is at fault. Fix that function and leave the others
   unchanged, even when the failing example uses them.
@@ -93,7 +95,7 @@ def mbpp_profile(task: MBPPTaskInput) -> Profile:
     Build the profile for one MBPP task.
 
     Args:
-        task: The task as dumped by the moulinette.
+        task: The task input as provided to the agent.
 
     Returns:
         A Profile with the spartan prompt and the MBPP limits.
@@ -126,7 +128,7 @@ def swe_profile(task: SWEBenchTaskInput) -> Profile:
     Build the profile for one SWE-bench task.
 
     Args:
-        task: The task as dumped by the moulinette.
+        task: The task input as provided to the agent.
 
     Returns:
         A Profile with the method prompt and the SWE-bench limits.
