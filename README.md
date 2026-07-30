@@ -55,8 +55,8 @@ terminal or a whole payload from a pipe):
 uv run sandbox configs/sandbox_template.json
 ```
 
-**Solve a single task** through the real entry points (task files are produced by
-the moulinette):
+**Solve a single task** through the real entry points (task files arrive in the
+format provided to the agent):
 
 ```bash
 uv run python -m agent_mbpp     --task-file task.json --output solution.json
@@ -71,6 +71,8 @@ A different model can be selected with `--model-name` and `--provider-url`.
 uv run python benchmarks/run.py --benchmark swebench \
     --tasks-dir <dir> --models "model/a,model/b"
 uv run python benchmarks/report.py --results-dir benchmarks/results
+uv run --with matplotlib python benchmarks/plots.py \
+    --results-dir benchmarks/results --out-dir benchmarks/figures
 ```
 
 **Checks:**

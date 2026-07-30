@@ -238,6 +238,8 @@ rejected one looked good in a small sample and degraded a larger one.
 | Verification gate on `get_patch` | patches submitted without running tests |
 | "Submit once tests pass" rule | 5 to 7 wasted iterations after a green run |
 | Explicit verdict line in `run_tests` output | post-green distrust: the raw runner output buries the result in shell noise, so the model re-verified through side channels |
+| Failing-run gate on `get_patch` | a red test run followed by a blind submission, observed live when the model batched edit, test and submit into one block and never read the result |
+| Full shell-trace filter in `run_tests` | nested trace lines (`++`) from the runner's environment setup flooding the observation and the context carried to every later turn |
 
 **Rejected** (a sample of the levers that did not survive):
 
@@ -261,7 +263,10 @@ steps.
 
 The shipped configuration passed a 10-round stability seal of 57/60
 task-runs, and the final configuration sealed at 30/30 task-runs over
-five consecutive sweeps of the regression pool.
+five consecutive sweeps of the regression pool. The two newest pieces
+(failing-run gate and full trace filter) revalidated at 15/15 over
+three further sweeps of the seed set, with input tokens on the
+trace-heavy tasks cut by half or more.
 
 ## 9. Cost
 

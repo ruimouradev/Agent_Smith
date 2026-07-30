@@ -79,7 +79,8 @@ def main():
             print(observation, end="")
 
     except Exception as exc:
-        # Graceful fallback: never crash silently during evaluation
+        # Graceful fallback: never crash silently, the caller needs
+        # an exit code and a reason on stderr
         print(f"Sandbox error: {exc}", file=sys.stderr)
         sys.exit(1)
     finally:

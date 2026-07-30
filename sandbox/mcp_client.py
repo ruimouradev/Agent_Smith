@@ -42,7 +42,7 @@ class MCPClient:
     def _run(self, coro):
         """Run a coroutine on the background loop and return its result."""
         future = asyncio.run_coroutine_threadsafe(coro, self._loop)
-        return future.result()  # blocks until done; propagates exceptions
+        return future.result()  # blocks until done and propagates errors
 
     def _require_session(self) -> ClientSession:
         """Return the live session, or fail if the client is not connected."""

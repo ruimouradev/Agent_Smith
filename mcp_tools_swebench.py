@@ -1,7 +1,7 @@
 """MCP tool server exposing a repository to the SWE-bench agent.
 
 The tools let the agent read and search files, edit them in place, run
-shell commands and the evaluation suite, and read back the resulting
+shell commands and the task's test suite, and read back the resulting
 patch. They serve two runtime modes, chosen by environment: a local
 testbed checkout, or a Docker container during a benchmark run.
 """
@@ -24,8 +24,10 @@ _EVAL_SCRIPT: str = os.environ.get("SWEBENCH_EVAL_SCRIPT", "")
 _TESTBED: str = os.environ.get("TESTBED_PATH", "/testbed")
 
 # An edit invalidates the previous test run. get_patch refuses to hand
-# out an untested diff, so a submission always follows a test.
+# out an untested diff or a failing one, so a submission always
+# follows a passing test run.
 _edited_since_test = False
+_tests_failed = False
 
 
 def _exec(cmd: str, workdir: str | None = None,
@@ -347,7 +349,7 @@ def _test_verdict(output: str) -> str:
 @mcp.tool()
 def run_tests() -> str:
     """
-    Run the task's evaluation test suite against the current state of the repo.
+    Run the task's test suite against the current state of the repo.
 
     Returns:
         Combined stdout and stderr of the eval script.
@@ -372,10 +374,13 @@ def run_tests() -> str:
             output = "Eval script timed out (>300s)."
         except Exception as exc:
             output = str(exc)
-    # lines starting with + are shell trace, not test results
+    # lines starting with one or more + are shell trace, not test results
     output = "\n".join(line for line in output.splitlines()
-                       if not line.startswith("+ "))
-    return (output.strip() or "(no output)") + _test_verdict(output)
+                       if not re.match(r"\++ ", line))
+    verdict = _test_verdict(output)
+    global _tests_failed
+    _tests_failed = "Tests failed" in verdict
+    return (output.strip() or "(no output)") + verdict
 
 
 @mcp.tool()
@@ -390,6 +395,10 @@ def get_patch() -> str:
         raise RuntimeError(
             "the repository changed after the last run_tests. Run the "
             "tests first and read their result, then collect the patch.")
+    if _tests_failed:
+        raise RuntimeError(
+            "the last run_tests failed. Fix the code, get a passing "
+            "run, then collect the patch.")
     workdir = "/testbed" if _CONTAINER else None
     code, output = _exec("git diff", workdir=workdir or _TESTBED)
     return output.strip() or "No changes (empty diff)."

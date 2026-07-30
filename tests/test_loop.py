@@ -10,8 +10,8 @@ from types import SimpleNamespace
 
 from agent.budget import Budget
 from agent.loop import _LAST_CALL, _truncate, run
-from agent.profiles import mbpp_profile
-from contract import feedback
+from agent.profiles import _mbpp_salvage, mbpp_profile
+from contract import StepMetrics, feedback
 
 
 class FakeSandbox:
@@ -154,6 +154,34 @@ def test_provider_crash_still_writes_solution(mbpp_task, tmp_path):
     assert (tmp_path / "solution.json").exists()
 
 
+def test_crash_after_work_still_salvages(mbpp_task, tmp_path):
+    """A crash mid-run keeps the best code: the solution carries the
+    last function even when the provider dies."""
+
+    class DiesAfterOne:
+        """One good reply, then the API goes down."""
+
+        def __init__(self):
+            self.called = False
+
+        def generate(self, messages, stop, max_tokens=None):
+            """Reply once, raise ever after."""
+            if self.called:
+                raise RuntimeError("api down")
+            self.called = True
+            return SimpleNamespace(
+                text="```python\ndef f(x):\n    return x\nprint(f(1))\n```",
+                input_tokens=1, output_tokens=1, time_ms=1.0,
+                retries=0, api_url="u", model_name="m")
+
+    profile = mbpp_profile(mbpp_task)
+    out = run(profile, FakeSandbox(), DiesAfterOne(), budget(),
+              tmp_path / "solution.json")
+    assert not out.success
+    assert "api down" in out.error
+    assert out.solution == "def f(x):\n    return x"
+
+
 def test_interrupt_is_recorded_and_still_propagates(mbpp_task, tmp_path):
     """Ctrl+C writes a solution.json that says why, and does not get
     swallowed on the way out."""
@@ -187,6 +215,54 @@ def test_budget_exhausted_reports_and_warns(mbpp_task, tmp_path):
     assert "Budget exhausted" in out.error
     assert out.iterations == 3
     assert any(_LAST_CALL in content for content in provider.calls[2])
+
+
+def test_budget_death_salvages_the_last_function(mbpp_task, tmp_path):
+    """A run that dies without final_answer carries the last function
+    the sandbox ran, not an empty solution."""
+    profile = mbpp_profile(mbpp_task)
+    provider = ScriptedProvider([
+        "```python\nimport math\ndef f(x):\n    return math.floor(x)\n"
+        "print(f(1.5))\n```",
+        "```python\ndef g(:\n    pass\n```",
+    ])
+    out = run(profile, FakeSandbox(), provider,
+              Budget(2, 10**6, 10**6, 60.0), tmp_path / "solution.json")
+    assert not out.success
+    assert "Budget exhausted" in out.error
+    # the broken last block does not parse, the one before does, and
+    # only its imports and definitions survive
+    assert out.solution == ("import math\n\n"
+                            "def f(x):\n    return math.floor(x)")
+
+
+def _step(code: str, obs: str) -> StepMetrics:
+    """A minimal step carrying only what the salvage reads."""
+    return StepMetrics(step=1, input_tokens=1, output_tokens=1,
+                       request_time_ms=1.0, api_url="u", model_name="m",
+                       llm_output="", sandbox_input=code,
+                       sandbox_output=obs, retries=0)
+
+
+def test_salvage_reads_the_function_from_a_code_string():
+    """The model often ships the function inside a string handed to
+    run_tests. The salvage reads it from there."""
+    steps = [_step("code = '''\ndef f(x):\n    return x * 2\n'''\n"
+                   "print(run_tests(code=code, test_list=[]))",
+                   '{"success": false, "output": "x"}')]
+    assert _mbpp_salvage(steps) == "def f(x):\n    return x * 2"
+
+
+def test_salvage_prefers_the_last_green_block():
+    """A block whose test run reported success wins over later edits
+    that were never seen to pass."""
+    steps = [
+        _step("def f(x):\n    return x",
+              '{"success": true, "output": ""}'),
+        _step("def f(x):\n    return x + 1",
+              '{"success": false, "output": "boom"}'),
+    ]
+    assert _mbpp_salvage(steps) == "def f(x):\n    return x"
 
 
 def test_output_cap_follows_the_remaining_budget(mbpp_task, tmp_path):

@@ -153,8 +153,9 @@ class _PatchFromContainer:
             return observation
         patch = self._client.call_tool("get_patch", {})
         if "diff --git" not in patch:
-            # nothing was changed, so the fix is not in place; dropping
-            # the marker keeps the loop running instead of accepting it
+            # nothing was changed, so the fix is not in place, and
+            # dropping the marker keeps the loop running instead of
+            # accepting it
             return observation[:mark] + _EMPTY_PATCH
         head = observation[:mark + len(feedback.FINAL_PREFIX)]
         return head + patch
