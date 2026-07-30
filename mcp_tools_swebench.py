@@ -400,7 +400,10 @@ def get_patch() -> str:
             "the last run_tests failed. Fix the code, get a passing "
             "run, then collect the patch.")
     workdir = "/testbed" if _CONTAINER else None
-    code, output = _exec("git diff", workdir=workdir or _TESTBED)
+    # fileMode=false keeps permission-only changes out of the patch,
+    # matching the diff form the validation expects
+    code, output = _exec("git -c core.fileMode=false diff",
+                         workdir=workdir or _TESTBED)
     patch = output.strip()
     if not patch:
         return "No changes (empty diff)."
