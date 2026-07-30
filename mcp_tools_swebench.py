@@ -401,7 +401,12 @@ def get_patch() -> str:
             "run, then collect the patch.")
     workdir = "/testbed" if _CONTAINER else None
     code, output = _exec("git diff", workdir=workdir or _TESTBED)
-    return output.strip() or "No changes (empty diff)."
+    patch = output.strip()
+    if not patch:
+        return "No changes (empty diff)."
+    # a unified diff must end with a newline, git apply rejects the
+    # file as corrupt without one
+    return patch + "\n"
 
 
 if __name__ == "__main__":
