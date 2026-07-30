@@ -5,9 +5,18 @@ open, wires up the MCP tool wrappers, then executes the code the
 supervisor feeds on stdin.
 """
 
+import ast
 import sys
 import os
 from contract import feedback
+
+# the dunder attributes ordinary code names explicitly, every other
+# attribute starting with "_" is refused before the code runs
+ALLOWED_DUNDERS = {
+    "__init__", "__name__", "__doc__", "__len__", "__str__", "__repr__",
+    "__eq__", "__lt__", "__hash__", "__iter__", "__next__", "__getitem__",
+    "__setitem__", "__contains__", "__call__", "__enter__", "__exit__",
+}
 
 
 class SandboxImportBlocker:
@@ -71,6 +80,25 @@ def secure_open(allowed_directories):
     return _safe_open
 
 
+def private_attribute(code):
+    """
+    The first private attribute the code reaches, or an empty string.
+
+    Private attributes of the allowed modules lead to os and sys, and
+    the class hierarchy leads to every loaded type, so both stay out of
+    reach. A syntax error is left for exec to report.
+    """
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return ""
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and node.attr.startswith("_"):
+            if node.attr not in ALLOWED_DUNDERS:
+                return node.attr
+    return ""
+
+
 def run_cell():
     import json
 
@@ -91,7 +119,10 @@ def run_cell():
 
     b_dict = (__builtins__ if isinstance(__builtins__, dict)
               else __builtins__.__dict__)
-    dangerous = {"eval", "exec", "compile", "open", "input", "breakpoint"}
+    # getattr, vars and globals reach attributes by name, which the
+    # syntax check on the code cannot see
+    dangerous = {"eval", "exec", "compile", "open", "input", "breakpoint",
+                 "getattr", "setattr", "delattr", "vars", "globals"}
 
     for k, v in b_dict.items():
         if k not in dangerous:
@@ -179,6 +210,9 @@ def run_cell():
                 _name, _req_fd, _res_fd, _params)
 
     # 6. Execute Code
+    blocked = private_attribute(code_to_run)
+    if blocked:
+        raise PermissionError(feedback.BLOCKED_ATTRIBUTE.format(name=blocked))
     try:
         exec(code_to_run, execution_namespace)
     except (KeyboardInterrupt, SystemExit):

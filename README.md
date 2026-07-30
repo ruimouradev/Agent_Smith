@@ -16,9 +16,12 @@ Python code block. The code runs in a sandbox and its output comes back as the
 next observation. The loop continues until the agent submits a final answer or
 exhausts its budget.
 
-Model-generated code is never trusted: it runs in an isolated child process
-with an import allowlist, disabled dangerous builtins, a path-checked `open`,
-and hard limits on time and memory. The agent reaches the outside world only
+Model-generated code runs in a separate child process with an import
+allowlist, disabled dangerous builtins, a path-checked `open`, no access to
+private attributes, and hard limits on time and memory. This keeps mistakes
+and runaway code away from the agent. It is not a security boundary against
+deliberately hostile code, so the SWE-bench repositories are only touched
+inside their Docker container. The agent reaches the outside world only
 through a small set of tools exposed over the Model Context Protocol (MCP): for
 MBPP a single `run_tests`, for SWE-bench a handful of repository inspection and
 editing tools that operate inside the task's Docker container.
@@ -141,6 +144,9 @@ Inside the cell, before any model code runs:
   `breakpoint`) are replaced with stubs that raise, and `__import__` is guarded.
 - `open` is swapped for a version that resolves the real path and refuses
   anything outside the allowed directories, which stops path-traversal escapes.
+- the code is parsed before it runs, and any private attribute (`_sys`,
+  `__class__`, `__subclasses__`) is refused, together with `getattr` and
+  `vars`, since those are the paths from an allowed module back to `os`.
 
 The allowlist, the writable directories, and the limits all come from the
 sandbox config file, so the same cell enforces whatever policy the config

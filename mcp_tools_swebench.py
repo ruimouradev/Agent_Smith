@@ -323,11 +323,11 @@ def run_command(command: str, workdir: str = "/testbed") -> str:
         workdir: Working directory for the command (default /testbed).
 
     Returns:
-        Combined stdout and stderr of the command.
+        Combined stdout and stderr of the command, then its exit code.
     """
     resolved = workdir if _CONTAINER else str(_resolve(workdir))
     code, output = _exec(command, workdir=resolved)
-    return output.strip() or "(no output)"
+    return f"{output.strip() or '(no output)'}\n[exit code {code}]"
 
 
 _FAIL_MARKS = ("FAILED", " failed", "exceptions", "DO *NOT* COMMIT")
@@ -400,7 +400,10 @@ def get_patch() -> str:
             "the last run_tests failed. Fix the code, get a passing "
             "run, then collect the patch.")
     workdir = "/testbed" if _CONTAINER else None
-    code, output = _exec("git diff", workdir=workdir or _TESTBED)
+    # fileMode=false keeps permission-only changes out of the patch,
+    # matching the diff form the validation expects
+    code, output = _exec("git -c core.fileMode=false diff",
+                         workdir=workdir or _TESTBED)
     patch = output.strip()
     if not patch:
         return "No changes (empty diff)."

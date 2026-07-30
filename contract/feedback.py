@@ -38,6 +38,10 @@ BLOCKED_PATH = (
 BLOCKED_BUILTIN = (
     "The builtin '{name}' is disabled here. Solve it with plain code."
 )
+BLOCKED_ATTRIBUTE = (
+    "The attribute '{name}' is private and not available here. "
+    "Use the public interface."
+)
 TIMEOUT = (
     "Execution stopped after {seconds}s. Write a faster approach."
 )

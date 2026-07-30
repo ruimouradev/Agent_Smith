@@ -224,9 +224,11 @@ def _salvage_patch(client, result: SolutionOutput, output: str) -> None:
     """
     try:
         patch = client.call_tool("get_patch", {})
+        if "diff --git" not in patch:
+            return
     except Exception:
-        return
-    if "diff --git" not in patch:
+        # any failure here leaves the solution as the loop wrote it,
+        # a broken salvage must never damage the recorded run
         return
     result.solution = patch
     Path(output).write_text(result.model_dump_json(indent=2))
