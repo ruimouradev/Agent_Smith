@@ -81,3 +81,41 @@ def test_swe_writes_a_failure_when_the_container_cannot_start(tmp_path):
     assert result.returncode == 0
     assert written["success"] is False
     assert written["error"]
+
+
+def test_swe_salvage_fills_solution_only_from_a_green_state(tmp_path):
+    """The patch salvage rewrites the solution when get_patch hands a
+    diff, and leaves it alone when the gate refuses or the repo is
+    clean."""
+    import importlib
+    shim = importlib.import_module(SWE_SHIM)
+    from contract import SolutionOutput
+
+    def dead_result():
+        return SolutionOutput.from_steps(
+            task_id="t", benchmark=BENCHMARK_SWEBENCH, success=False,
+            solution="", steps=[], total_time_seconds=1.0,
+            error="Budget exhausted before final_answer.")
+
+    class GreenClient:
+        def call_tool(self, name, arguments):
+            return "diff --git a/x b/x\n+fix\n"
+
+    class GateClient:
+        def call_tool(self, name, arguments):
+            raise RuntimeError("the last run_tests failed")
+
+    class CleanClient:
+        def call_tool(self, name, arguments):
+            return "No changes (empty diff)."
+
+    out = tmp_path / "solution.json"
+    result = dead_result()
+    shim._salvage_patch(GreenClient(), result, out)
+    assert result.solution.startswith("diff --git")
+    assert json.loads(out.read_text())["solution"] == result.solution
+
+    for client in (GateClient(), CleanClient()):
+        result = dead_result()
+        shim._salvage_patch(client, result, out)
+        assert result.solution == ""

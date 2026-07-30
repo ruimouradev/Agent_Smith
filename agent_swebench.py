@@ -82,7 +82,9 @@ def main() -> None:
         bridge = _start_bridge(task)
         client = _TrimmedTests(_connect_tools(bridge, task))
         sandbox = _PatchFromContainer(_make_sandbox(client), client)
-        run(profile, sandbox, provider, budget, args.output)
+        result = run(profile, sandbox, provider, budget, args.output)
+        if not result.success and not result.solution.strip():
+            _salvage_patch(client, result, args.output)
     except Exception as exc:  # before the loop: still write a solution
         _write_failure(args.output, task_id, f"{type(exc).__name__}: {exc}")
     finally:
@@ -204,6 +206,30 @@ def _make_sandbox(client) -> Sandbox:
     config = SandboxConfig(max_execution_time_seconds=600)
     return LocalSandbox(config, manual=manual,
                         mcp_client=client, mcp_tools=tools)
+
+
+def _salvage_patch(client, result: SolutionOutput, output: str) -> None:
+    """Fill the solution with the repository's diff when the run died
+    without submitting one.
+
+    get_patch refuses to answer unless the last test run passed and
+    nothing changed since, so only a state verified green can be
+    salvaged this way. A run that never reached green keeps its empty
+    solution.
+
+    Args:
+        client: The connected MCP client for the task's tools.
+        result: The SolutionOutput the loop wrote, updated in place.
+        output: Path of the solution.json to rewrite.
+    """
+    try:
+        patch = client.call_tool("get_patch", {})
+    except Exception:
+        return
+    if "diff --git" not in patch:
+        return
+    result.solution = patch
+    Path(output).write_text(result.model_dump_json(indent=2))
 
 
 def _write_failure(output: str, task_id: str, error: str) -> None:

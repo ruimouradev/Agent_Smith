@@ -240,6 +240,8 @@ rejected one looked good in a small sample and degraded a larger one.
 | Explicit verdict line in `run_tests` output | post-green distrust: the raw runner output buries the result in shell noise, so the model re-verified through side channels |
 | Failing-run gate on `get_patch` | a red test run followed by a blind submission, observed live when the model batched edit, test and submit into one block and never read the result |
 | Full shell-trace filter in `run_tests` | nested trace lines (`++`) from the runner's environment setup flooding the observation and the context carried to every later turn |
+| Trailing newline on the emitted patch | `git apply` rejects a diff without a final newline as corrupt, so every pass depended on the validator's fuzzy fallback, and one seal submission fell to that parser |
+| Green-state salvage of an unsubmitted diff | a run that reaches a passing test but hits the iteration cap before submitting scored zero with the fix already sitting in the repository |
 
 **Rejected** (a sample of the levers that did not survive):
 
