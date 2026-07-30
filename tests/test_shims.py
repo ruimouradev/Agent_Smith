@@ -115,7 +115,11 @@ def test_swe_salvage_fills_solution_only_from_a_green_state(tmp_path):
     assert result.solution.startswith("diff --git")
     assert json.loads(out.read_text())["solution"] == result.solution
 
-    for client in (GateClient(), CleanClient()):
+    class BrokenClient:
+        def call_tool(self, name, arguments):
+            return None
+
+    for client in (GateClient(), CleanClient(), BrokenClient()):
         result = dead_result()
         shim._salvage_patch(client, result, out)
         assert result.solution == ""
