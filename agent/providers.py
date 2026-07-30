@@ -111,7 +111,7 @@ class Provider:
         text = _as_text(response.choices[0].message.content)
         usage = response.usage
         # some endpoints (seen on the OpenRouter free tier) return no
-        # usage counts; the counts are estimated from the text so a
+        # usage counts. The counts are estimated from the text so a
         # missing metric never ends the task. Mistral always reports
         # usage, so the graded path keeps its exact numbers.
         if usage is not None:

@@ -83,7 +83,7 @@ class LocalSandbox:
             env=env,
             preexec_fn=_set_limits,
             pass_fds=pass_fds,
-            text=False,  # binary mode; we decode ourselves
+            text=False,  # binary mode, we decode ourselves
         )
         # stdin/stdout are pipes we asked for, so they are never None.
         assert proc.stdin is not None and proc.stdout is not None

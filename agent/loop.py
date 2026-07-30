@@ -121,6 +121,10 @@ def run(profile, sandbox: Sandbox, provider, budget,
         error = f"{type(exc).__name__}: {exc}"
         raise
     finally:
+        if not success and not solution and profile.salvage:
+            # the solution would go out empty, so it carries the last
+            # code the steps produced, whatever ended the run
+            solution = profile.salvage(steps)
         result = SolutionOutput.from_steps(
             task_id=profile.task_id,
             benchmark=profile.benchmark,
